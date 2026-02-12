@@ -1,0 +1,239 @@
+# CPTED Assessor — Project Reference
+
+## What This Project Is
+
+A **Progressive Web App (PWA)** for conducting CPTED (Crime Prevention Through Environmental Design) residential site assessments on iPad. Replaces clipboard + camera + notebook with a guided digital walkthrough that scores checklist items, captures photos, and generates professional PDF reports.
+
+**Built for:** Volusia Sheriff's Office field assessors
+**Primary device:** iPad (Safari / home screen PWA)
+**Must work fully offline** — all data stored locally in IndexedDB
+
+## Phases
+
+- **Phase 1 (MVP — current):** Frontend-only PWA with offline storage and client-side PDF export. No server required.
+- **Phase 2 (Future):** Node.js + Express API, PostgreSQL, Docker on Proxmox home server, Nginx reverse proxy, server-side PDF via Puppeteer.
+
+## Tech Stack (Phase 1)
+
+- **React 18+** with **TypeScript** (strict)
+- **Vite** for build tooling
+- **Tailwind CSS** — mobile-first, iPad-optimized
+- **Dexie.js** — IndexedDB wrapper for offline data persistence
+- **Workbox** — Service Worker for offline app shell caching
+- **jsPDF + html2canvas** OR **@react-pdf/renderer** — client-side PDF generation
+- **PWA manifest** — home screen install, splash screen, icons
+
+## Project Structure
+
+```
+cpted-assessor/
+├── public/
+│   ├── manifest.json
+│   ├── sw.js
+│   ├── icons/
+│   └── index.html
+├── src/
+│   ├── main.tsx
+│   ├── App.tsx
+│   ├── data/
+│   │   └── zones.ts              # Zone/checklist definitions (SOURCE OF TRUTH)
+│   ├── db/
+│   │   └── database.ts           # Dexie.js setup and schema
+│   ├── types/
+│   │   └── index.ts              # TypeScript interfaces
+│   ├── pages/
+│   │   ├── Home.tsx              # Assessment list
+│   │   ├── NewAssessment.tsx     # Assessment info form
+│   │   ├── Assessment.tsx        # Zone navigator (main working screen)
+│   │   └── Summary.tsx           # Overall summary + report generation
+│   ├── components/
+│   │   ├── ZoneSidebar.tsx       # Zone nav with completion indicators
+│   │   ├── ZoneView.tsx          # Active zone display
+│   │   ├── PrincipleSection.tsx  # Collapsible principle with items
+│   │   ├── ChecklistItem.tsx     # Single item: score buttons + photo + notes
+│   │   ├── ScoreButtons.tsx      # [1][2][3][4][5][N/A] tap targets
+│   │   ├── PhotoCapture.tsx      # Camera integration
+│   │   ├── PhotoThumbnail.tsx    # Inline photo display
+│   │   └── ZoneSummary.tsx       # Per-zone score summary box
+│   ├── services/
+│   │   ├── scoring.ts            # Score calculation logic
+│   │   ├── pdf.ts                # PDF report generation
+│   │   └── photos.ts            # Photo capture, compression, storage
+│   └── styles/
+│       └── globals.css           # Tailwind imports + custom styles
+├── package.json
+├── tsconfig.json
+├── vite.config.ts
+└── tailwind.config.js
+```
+
+## Design System
+
+### Colors
+- **Navy (primary):** `#1B3A5C`
+- **Medium Blue:** `#4A7FB5`
+- **Light Blue:** `#D6E8F5`
+
+### UI Rules
+- iPad-optimized — design primarily for **landscape**, support portrait
+- **Large touch targets** — minimum 44px tap areas
+- Score buttons must be prominent and easy to hit in the field
+- Minimal typing — tap-based scoring, optional text notes, photo capture via device camera
+- Dark navy + light blue color scheme matching report branding
+
+### Screen Flow
+```
+Home Screen (Assessment List)
+  → [+ New Assessment] → Assessment Info Form
+  → [Existing Assessment] → Zone Navigator
+
+Assessment Info Form
+  → [Start Assessment] → Zone Navigator
+
+Zone Navigator (main working screen)
+  ├── Zone sidebar/tabs (1-7) with completion indicators
+  ├── Active zone: description, principle sections (collapsible)
+  │   ├── Item text + Score buttons [1][2][3][4][5][N/A]
+  │   ├── [Photo] button → camera capture
+  │   ├── [Note] button → text input
+  │   └── Photo thumbnails
+  ├── Zone Summary box (auto-calculated)
+  └── [← Previous Zone] [Next Zone →]
+
+Assessment Summary Screen
+  ├── Score table by zone
+  ├── Top 5 Recommendations (text + priority + timeline)
+  ├── Quick Wins list
+  ├── Liability waiver (pre-filled, read-only)
+  ├── [Generate PDF Report]
+  └── [Mark Complete]
+```
+
+## Data Model
+
+All IDs use **UUIDs**. IndexedDB structure mirrors future PostgreSQL schema.
+
+### Key Tables / Object Stores
+- **assessments** — property info, assessor info, conditions, overall score, recommendations (JSON), status
+- **zone_scores** — per-zone averages, priority findings, completion status
+- **item_scores** — individual checklist item scores (1-5 or N/A), notes, photo references
+- **photos** — blob storage, GPS coordinates, timestamps, zone/item associations
+- **recommendations** — embedded as JSON in assessments for Phase 1
+
+### Dexie.js Schema
+```javascript
+const db = new Dexie('CPTEDAssessments');
+db.version(1).stores({
+  assessments: 'id, status, created_at, address',
+  zone_scores: 'id, assessment_id, zone_key',
+  item_scores: 'id, assessment_id, [zone_key+principle]',
+  photos: 'id, assessment_id, item_score_id, zone_key',
+});
+```
+
+## Assessment Zones (7 total, 141 checklist items)
+
+| # | Zone Key | Zone Name | Principles |
+|---|----------|-----------|------------|
+| 1 | `street_approach` | Street Approach & Address Visibility | Natural Surveillance, Access Control, Territorial Reinforcement, Maintenance & Image |
+| 2 | `front_yard` | Front Yard & Primary Entry | Natural Surveillance, Access Control, Territorial Reinforcement, Maintenance & Image |
+| 3 | `side_yards` | Side Yards & Pathways | Natural Surveillance, Access Control, Territorial Reinforcement, Maintenance & Image |
+| 4 | `rear_yard` | Rear Yard & Back Entry | Natural Surveillance, Access Control, Territorial Reinforcement, Maintenance & Image |
+| 5 | `garage_driveway` | Garage & Driveway | Natural Surveillance, Access Control, Territorial Reinforcement, Maintenance & Image |
+| 6 | `exterior_lighting` | Exterior Lighting | Natural Surveillance (Lighting Quality), Lighting Controls & Technology, Fixture Types & Glare Assessment, Maintenance & Image |
+| 7 | `windows_interior` | Windows & Interior Considerations | Natural Surveillance, Access Control, Security Systems & Technology, Behavioral & Routine Considerations |
+
+The full checklist item text lives in `src/data/zones.ts` and must match the CPTED_Residential_Assessment_Checklist.docx exactly.
+
+## Scoring System
+
+| Score | Label | Description |
+|-------|-------|-------------|
+| 1 | Critical | Immediate action required — significant vulnerability |
+| 2 | Deficient | Notable concern — should be addressed promptly |
+| 3 | Adequate | Meets basic standard but could be improved |
+| 4 | Good | Above average — minor improvements possible |
+| 5 | Excellent | Best practice standard met |
+| N/A | Not Applicable | Item does not apply to this property |
+
+### Calculation Rules
+- **Scoring uses 1-5 only. There is no zero score.**
+- **N/A items are excluded from ALL score calculations**
+- **Principle score** = average of scored items within that principle for a zone
+- **Zone score** = average of all scored items within the zone
+- **Overall score** = average of all zone scores (equal weight, not weighted)
+
+## Critical Rules
+
+1. `zones.ts` is the **source of truth** for all checklist content
+2. Scoring is **1-5** (not 0-5) — no zero score exists
+3. **N/A items excluded** from all score calculations
+4. Photos stored as **blobs** in IndexedDB, NOT base64 strings (iPad performance)
+5. PDF must include the **liability waiver verbatim** (see project plan)
+6. PWA manifest app name: **"CPTED Assessor"**
+7. `property_type` only implements `single_family_residential` for now — design UI to be expandable
+8. Timestamps: **local time for display**, stored as **ISO 8601 UTC** internally
+9. Photo capture should auto-grab **GPS coordinates and timestamp** from device
+
+## Liability Waiver (Verbatim — Do Not Modify)
+
+```
+This CPTED assessment is provided solely for informational and preventative purposes.
+The observations and recommendations included in this report are offered as voluntary
+guidance and do not constitute mandated safety requirements, building code standards,
+or legal directives. The implementation of any recommendations is entirely at the
+discretion of the property owner and should be undertaken only with appropriate
+professional consultation when necessary. The Volusia Sheriff's Office, its employees,
+agents, and representatives make no warranties, guarantees, or assurances regarding
+the effectiveness of any recommended security measures. Crime prevention strategies
+reduce risk but cannot completely eliminate the possibility of criminal activity. By
+accepting this report, the property owner acknowledges that the Volusia Sheriff's
+Office shall not be held liable for any actions taken or not taken based on the
+information provided, nor for any damages, losses, or incidents that may occur on or
+near the property following this assessment.
+```
+
+## MVP Build Order
+
+1. Project scaffolding — Vite + React + TypeScript + Tailwind + PWA manifest
+2. Zone data file — port all 141 checklist items into `zones.ts`
+3. Database setup — Dexie.js with all object stores
+4. Assessment info form — create new assessment with property details
+5. Zone navigator + checklist UI — main working screen with score buttons
+6. Photo capture — camera integration with IndexedDB blob storage
+7. Score calculations — auto-calculate zone and overall scores
+8. Assessment summary screen — recommendations, quick wins
+9. PDF report generation — client-side PDF matching the docx format
+10. Service Worker — offline caching for full offline support
+11. Home screen — assessment list with status indicators
+12. Polish — iPad-optimize touch targets, test in Safari, PWA install flow
+
+## Commands
+
+```bash
+# Development
+npm run dev           # Start Vite dev server
+npm run build         # Production build
+npm run preview       # Preview production build
+npm run lint          # Run linter
+npm run type-check    # TypeScript type checking
+```
+
+## Reference Files
+
+- `files(1)/CPTED_App_Project_Plan.md` — Full project plan with complete zone data, API endpoints, Docker config
+- `files(1)/CPTED_Residential_Assessment_Checklist.docx` — Original checklist document (PDF report must match this format)
+
+## Current Status
+
+**MVP Step 1 complete.** Next up: Step 2 (zones.ts) and Step 3 (Dexie.js database).
+
+Git repo has not been initialized yet — do this before starting Step 2.
+
+## Session Log
+
+### 2026-02-12 — Project Setup
+- Created CLAUDE.md, `/close-session` global command
+- Completed Step 1: Vite + React 19 + TS + Tailwind v4 + PWA scaffolding
+- All 4 routes wired, TypeScript types defined, iPad CSS in place, clean build passing
+- Next: Step 2 (zones.ts), Step 3 (Dexie DB), init git repo

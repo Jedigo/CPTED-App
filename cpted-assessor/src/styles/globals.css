@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+@theme {
+  --color-navy: #1B3A5C;
+  --color-navy-light: #244B73;
+  --color-navy-dark: #122840;
+  --color-blue-medium: #4A7FB5;
+  --color-blue-light: #D6E8F5;
+  --color-blue-pale: #EBF3FA;
+
+  --color-score-critical: #DC2626;
+  --color-score-deficient: #EA580C;
+  --color-score-adequate: #CA8A04;
+  --color-score-good: #16A34A;
+  --color-score-excellent: #059669;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Base styles for iPad PWA */
+html, body, #root {
+  height: 100%;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-blue-pale);
+  color: var(--color-navy);
+}
+
+/* Ensure touch targets meet 44px minimum */
+button, a, input, select, textarea {
+  min-height: 44px;
+}
+
+/* Safe area padding for iPad notch/home indicator */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
