@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/database';
 import { ZONES } from '../data/zones';
 import type { ItemScore } from '../types';
+import { persistZoneScore, persistOverallScore, persistAllScores } from '../services/scoring';
 import ZoneSidebar from '../components/ZoneSidebar';
 import ZoneView from '../components/ZoneView';
 
@@ -13,6 +14,7 @@ export default function Assessment() {
   const [activeZoneKey, setActiveZoneKey] = useState(ZONES[0].key);
   const mainRef = useRef<HTMLDivElement>(null);
   const initRef = useRef(false);
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
 
   const assessment = useLiveQuery(
     () => (id ? db.assessments.get(id) : undefined),
@@ -54,6 +56,22 @@ export default function Assessment() {
     }
   }, [id, itemScores]);
 
+  // Persist all scores on mount (migration safeguard)
+  useEffect(() => {
+    if (id) {
+      persistAllScores(id);
+    }
+  }, [id]);
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (persistTimerRef.current) {
+        clearTimeout(persistTimerRef.current);
+      }
+    };
+  }, []);
+
   // Scroll main content to top when switching zones
   useEffect(() => {
     mainRef.current?.scrollTo(0, 0);
@@ -84,8 +102,23 @@ export default function Assessment() {
         score: isNa ? null : score,
         is_na: isNa,
       });
+
+      // Debounced persistence of zone + overall scores
+      if (persistTimerRef.current) {
+        clearTimeout(persistTimerRef.current);
+      }
+      persistTimerRef.current = setTimeout(async () => {
+        if (!id) return;
+        const allItems = await db.item_scores
+          .where('assessment_id')
+          .equals(id)
+          .toArray();
+        const zoneItems = allItems.filter((s) => s.zone_key === activeZoneKey);
+        await persistZoneScore(id, activeZoneKey, zoneItems);
+        await persistOverallScore(id);
+      }, 500);
     },
-    [],
+    [id, activeZoneKey],
   );
 
   const handleNotesChange = useCallback(

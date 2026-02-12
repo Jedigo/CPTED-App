@@ -1,5 +1,6 @@
 import type { ItemScore } from '../types';
 import { ZONES } from '../data/zones';
+import { isZoneComplete, getCompletionCounts } from '../services/scoring';
 
 interface ZoneSidebarProps {
   activeZoneKey: string;
@@ -11,9 +12,9 @@ function getCompletionStatus(
   items: ItemScore[] | undefined,
 ): 'none' | 'partial' | 'complete' {
   if (!items || items.length === 0) return 'none';
-  const addressed = items.filter((s) => s.score !== null || s.is_na).length;
+  if (isZoneComplete(items)) return 'complete';
+  const { addressed } = getCompletionCounts(items);
   if (addressed === 0) return 'none';
-  if (addressed === items.length) return 'complete';
   return 'partial';
 }
 
