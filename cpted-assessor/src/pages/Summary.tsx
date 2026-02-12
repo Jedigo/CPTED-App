@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/database';
@@ -10,6 +10,8 @@ import {
   getScoreLabel,
   getCompletionCounts,
 } from '../services/scoring';
+import RecommendationEditor from '../components/RecommendationEditor';
+import type { Recommendation } from '../types';
 
 const LIABILITY_WAIVER = `This CPTED assessment is provided solely for informational and preventative purposes. The observations and recommendations included in this report are offered as voluntary guidance and do not constitute mandated safety requirements, building code standards, or legal directives. The implementation of any recommendations is entirely at the discretion of the property owner and should be undertaken only with appropriate professional consultation when necessary. The Volusia Sheriff's Office, its employees, agents, and representatives make no warranties, guarantees, or assurances regarding the effectiveness of any recommended security measures. Crime prevention strategies reduce risk but cannot completely eliminate the possibility of criminal activity. By accepting this report, the property owner acknowledges that the Volusia Sheriff's Office shall not be held liable for any actions taken or not taken based on the information provided, nor for any damages, losses, or incidents that may occur on or near the property following this assessment.`;
 
@@ -44,6 +46,61 @@ export default function Summary() {
       persistAllScores(id);
     }
   }, [id]);
+
+  // --- Recommendations & Quick Wins state ---
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [quickWins, setQuickWins] = useState<Recommendation[]>([]);
+  const [recsInitialized, setRecsInitialized] = useState(false);
+
+  // Seed local state from assessment on first load
+  useEffect(() => {
+    if (assessment && !recsInitialized) {
+      setRecommendations(assessment.top_recommendations ?? []);
+      setQuickWins(assessment.quick_wins ?? []);
+      setRecsInitialized(true);
+    }
+  }, [assessment, recsInitialized]);
+
+  // Debounced persistence
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const persistRecs = useCallback(
+    (recs: Recommendation[], qw: Recommendation[]) => {
+      if (!id) return;
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        db.assessments.update(id, {
+          top_recommendations: recs,
+          quick_wins: qw,
+          updated_at: new Date().toISOString(),
+        });
+      }, 500);
+    },
+    [id],
+  );
+
+  // Flush on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  const handleRecsChange = useCallback(
+    (items: Recommendation[]) => {
+      setRecommendations(items);
+      persistRecs(items, quickWins);
+    },
+    [quickWins, persistRecs],
+  );
+
+  const handleQuickWinsChange = useCallback(
+    (items: Recommendation[]) => {
+      setQuickWins(items);
+      persistRecs(recommendations, items);
+    },
+    [recommendations, persistRecs],
+  );
 
   async function handleMarkComplete() {
     if (!id) return;
@@ -225,14 +282,35 @@ export default function Summary() {
           </table>
         </div>
 
-        {/* Recommendations Placeholder */}
+        {/* Top 5 Recommendations */}
         <div className="bg-white rounded-xl border border-navy/10 shadow-sm p-6">
           <h2 className="text-sm font-bold text-navy/60 uppercase tracking-wide mb-3">
-            Recommendations
+            Top 5 Recommendations
           </h2>
-          <p className="text-navy/40 text-sm italic">
-            Recommendations and Quick Wins — coming in Step 8.
-          </p>
+          {id && (
+            <RecommendationEditor
+              items={recommendations}
+              type="recommendation"
+              assessmentId={id}
+              maxItems={5}
+              onChange={handleRecsChange}
+            />
+          )}
+        </div>
+
+        {/* Quick Wins */}
+        <div className="bg-white rounded-xl border border-navy/10 shadow-sm p-6">
+          <h2 className="text-sm font-bold text-navy/60 uppercase tracking-wide mb-3">
+            Quick Wins
+          </h2>
+          {id && (
+            <RecommendationEditor
+              items={quickWins}
+              type="quick_win"
+              assessmentId={id}
+              onChange={handleQuickWinsChange}
+            />
+          )}
         </div>
 
         {/* Liability Waiver */}
