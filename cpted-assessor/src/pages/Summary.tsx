@@ -10,6 +10,7 @@ import {
   getScoreLabel,
   getCompletionCounts,
 } from '../services/scoring';
+import { generatePDF } from '../services/pdf';
 import RecommendationEditor from '../components/RecommendationEditor';
 import type { Recommendation } from '../types';
 
@@ -101,6 +102,22 @@ export default function Summary() {
     },
     [recommendations, persistRecs],
   );
+
+  const [generating, setGenerating] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+
+  async function handleGeneratePDF() {
+    if (!id) return;
+    setGenerating(true);
+    setPdfError(null);
+    try {
+      await generatePDF(id);
+    } catch (err) {
+      setPdfError(err instanceof Error ? err.message : 'Failed to generate PDF');
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   async function handleMarkComplete() {
     if (!id) return;
@@ -324,13 +341,29 @@ export default function Summary() {
         </div>
 
         {/* Action Buttons */}
+        {pdfError && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+            {pdfError}
+          </div>
+        )}
         <div className="flex items-center gap-4 pb-8">
           <button
             type="button"
-            disabled
-            className="flex-1 px-6 py-4 rounded-xl font-semibold text-sm bg-navy/20 text-navy/40 cursor-not-allowed"
+            disabled={overall === null || generating}
+            onClick={handleGeneratePDF}
+            className={`flex-1 px-6 py-4 rounded-xl font-semibold text-sm transition-colors ${
+              overall === null
+                ? 'bg-navy/20 text-navy/40 cursor-not-allowed'
+                : generating
+                  ? 'bg-blue-medium text-white/80 cursor-wait'
+                  : 'bg-navy text-white hover:bg-navy/90'
+            }`}
           >
-            Generate PDF Report (Step 9)
+            {generating
+              ? 'Generating PDF...'
+              : overall === null
+                ? 'Score items to generate PDF'
+                : 'Generate PDF Report'}
           </button>
           {isComplete ? (
             <button
