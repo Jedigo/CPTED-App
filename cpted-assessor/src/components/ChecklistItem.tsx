@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { ItemScore } from '../types';
 import ScoreButtons from './ScoreButtons';
+import PhotoThumbnail from './PhotoThumbnail';
+import { savePhoto, deletePhoto } from '../services/photos';
 
 interface ChecklistItemProps {
   itemScore: ItemScore;
@@ -15,9 +17,37 @@ export default function ChecklistItem({
 }: ChecklistItemProps) {
   const [showNote, setShowNote] = useState(!!itemScore.notes);
   const [noteText, setNoteText] = useState(itemScore.notes);
+  const [saving, setSaving] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isScored = itemScore.score !== null;
   const isNa = itemScore.is_na;
+  const photoCount = itemScore.photo_ids.length;
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setSaving(true);
+    try {
+      await savePhoto(file, itemScore.assessment_id, itemScore.id, itemScore.zone_key);
+    } catch (err) {
+      console.error('Failed to save photo:', err);
+    } finally {
+      setSaving(false);
+      // Reset input so the same file can be re-selected
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDeletePhoto = async (photoId: string) => {
+    try {
+      await deletePhoto(photoId, itemScore.id);
+    } catch (err) {
+      console.error('Failed to delete photo:', err);
+    }
+  };
 
   return (
     <div
@@ -54,15 +84,36 @@ export default function ChecklistItem({
           Note
         </button>
 
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleFileChange}
+          className="hidden"
+        />
+
         <button
           type="button"
-          disabled
-          className="px-3 h-11 rounded-lg text-sm font-medium border-2 border-navy/10 text-navy/25 bg-gray-50 cursor-not-allowed"
-          title="Photo capture — coming in Step 6"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={saving}
+          className={`px-3 h-11 rounded-lg text-sm font-medium border-2 transition-colors ${
+            photoCount > 0
+              ? 'bg-blue-medium text-white border-blue-medium'
+              : 'bg-white border-navy/20 text-navy/50 hover:border-navy/40'
+          } ${saving ? 'opacity-50 cursor-wait' : ''}`}
         >
-          Photo
+          {saving ? 'Saving...' : photoCount > 0 ? `Photo (${photoCount})` : 'Photo'}
         </button>
       </div>
+
+      {photoCount > 0 && (
+        <div className="mt-3 flex gap-2 flex-wrap">
+          {itemScore.photo_ids.map((id) => (
+            <PhotoThumbnail key={id} photoId={id} onDelete={handleDeletePhoto} />
+          ))}
+        </div>
+      )}
 
       {showNote && (
         <textarea

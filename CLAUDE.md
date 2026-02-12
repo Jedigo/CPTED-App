@@ -226,9 +226,9 @@ npm run type-check    # TypeScript type checking
 
 ## Current Status
 
-**MVP Step 1 complete.** Next up: Step 2 (zones.ts) and Step 3 (Dexie.js database).
+**MVP Steps 1–5 complete.** Next up: Step 6 (Photo Capture), Step 7 (Score Calculations).
 
-Git repo has not been initialized yet — do this before starting Step 2.
+Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch: `main`)
 
 ## Session Log
 
@@ -236,4 +236,11 @@ Git repo has not been initialized yet — do this before starting Step 2.
 - Created CLAUDE.md, `/close-session` global command
 - Completed Step 1: Vite + React 19 + TS + Tailwind v4 + PWA scaffolding
 - All 4 routes wired, TypeScript types defined, iPad CSS in place, clean build passing
-- Next: Step 2 (zones.ts), Step 3 (Dexie DB), init git repo
+
+### 2026-02-12 — Steps 2–5
+- Step 2: zones.ts with all 7 zones, 141 checklist items
+- Step 3: Dexie.js database schema (assessments, zone_scores, item_scores, photos)
+- Step 4: NewAssessment form with property/assessor details
+- Step 5: Zone navigator — ScoreButtons, ChecklistItem, PrincipleSection, ZoneSummary, ZoneView, ZoneSidebar, Assessment page
+- Git repo initialized and pushed to GitHub
+- Next: Step 6 (Photo Capture), Step 7 (Score Calculations)
