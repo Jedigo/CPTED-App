@@ -226,7 +226,7 @@ npm run type-check    # TypeScript type checking
 
 ## Current Status
 
-**MVP Phase 1 complete (Steps 1–12).** All core features working end-to-end. PDF report redesigned for resident audience. See TODO list in auto-memory for pending polish items.
+**Phase 2 backend deployed and running.** Server (Express 5 + Drizzle ORM + PostgreSQL) deployed via Docker Compose on `cpted-server` VM (10.21.1.138). iPad PWA syncs assessments to PostgreSQL over Tailscale. Redeploy with `./deploy.sh`.
 
 Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch: `main`)
 
@@ -255,3 +255,15 @@ Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch:
 - Fixed PDF bug: item matching used `item_order` (global per zone) instead of `item_text`, causing dashes for all principles after the first
 - Created `/close-session` global skill at `~/.claude/skills/close-session/SKILL.md`
 - Next: PDF report visual polish (see `~/.claude/projects/.../memory/todo.md`)
+
+### 2026-02-14 — Phase 2 Backend: Build + Deploy
+- **All 8 steps implemented:** server scaffolding, DB schema, CRUD, photo upload, sync, server-side PDF, frontend sync UI, Docker + deploy
+- Server: Express 5 + TypeScript + Drizzle ORM + PostgreSQL 16, all in `server/` directory
+- DB: 5 tables (assessments, zone_scores, item_scores, photos, recommendations) with CASCADE deletes, auto-migrate on startup
+- Sync: `POST /api/sync` upserts full payload in a Drizzle transaction, recalculates scores; photos uploaded separately via multipart
+- Frontend: new `sync.ts` service, "Sync to Server" button on Summary page, "Synced" status badge on Home cards
+- Deploy: `docker-compose.yml` (postgres:16-alpine + Node.js app + nginx:alpine), `deploy.sh` (build locally → rsync → docker compose up)
+- Deployed to `cpted-server` VM (Ubuntu 24.04, Tailscale 10.21.1.138) at `~/cpted-app/`
+- Fixed: `state` column widened from varchar(2) to varchar(50), sync transaction rewritten to use Drizzle `db.transaction()` instead of manual BEGIN/COMMIT on pool client
+- Verified iPad → Tailscale → server sync end-to-end
+- Next: commit Phase 2 code, test server-side PDF download, photo sync from iPad

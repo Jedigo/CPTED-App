@@ -1,0 +1,1 @@
+ALTER TABLE "assessments" ALTER COLUMN "state" SET DATA TYPE varchar(50);

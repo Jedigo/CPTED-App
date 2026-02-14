@@ -12,6 +12,7 @@ import {
 } from '../services/scoring';
 import { generatePDF } from '../services/pdf';
 import { generateRecommendations, generateQuickWins } from '../services/recommendations';
+import { syncAssessment, checkServerHealth } from '../services/sync';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import RecommendationEditor from '../components/RecommendationEditor';
 import type { Recommendation } from '../types';
@@ -117,6 +118,33 @@ export default function Summary() {
 
   const [generating, setGenerating] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncSuccess, setSyncSuccess] = useState<string | null>(null);
+  const [serverReachable, setServerReachable] = useState<boolean | null>(null);
+
+  // Check server reachability when component mounts
+  useEffect(() => {
+    checkServerHealth().then(setServerReachable);
+  }, []);
+
+  async function handleSync() {
+    if (!id) return;
+    setSyncing(true);
+    setSyncError(null);
+    setSyncSuccess(null);
+    try {
+      const result = await syncAssessment(id);
+      setSyncSuccess(
+        `Synced successfully${result.photosUploaded > 0 ? ` (${result.photosUploaded} photos uploaded)` : ''}`
+      );
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : 'Sync failed');
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   async function handleGeneratePDF() {
     if (!id) return;
@@ -388,6 +416,16 @@ export default function Summary() {
             {pdfError}
           </div>
         )}
+        {syncError && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+            {syncError}
+          </div>
+        )}
+        {syncSuccess && (
+          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm">
+            {syncSuccess}
+          </div>
+        )}
         <div className="flex items-center gap-4 pb-8">
           <button
             type="button"
@@ -425,6 +463,34 @@ export default function Summary() {
             </button>
           )}
         </div>
+
+        {/* Sync to Server */}
+        {serverReachable && (
+          <div className="bg-white rounded-xl border border-navy/10 shadow-sm p-4 flex items-center justify-between gap-4 -mt-4 mb-8">
+            <div>
+              <p className="text-sm font-semibold text-navy">Sync to Server</p>
+              <p className="text-xs text-navy/50 mt-0.5">
+                {assessment.synced_at
+                  ? `Last synced: ${new Date(assessment.synced_at).toLocaleString()}`
+                  : 'Not yet synced to server'}
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={syncing || overall === null}
+              onClick={handleSync}
+              className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all flex-shrink-0 ${
+                syncing
+                  ? 'bg-blue-medium/60 text-white cursor-wait'
+                  : overall === null
+                    ? 'bg-navy/20 text-navy/40 cursor-not-allowed'
+                    : 'bg-blue-medium text-white hover:bg-blue-medium/80 active:scale-95'
+              }`}
+            >
+              {syncing ? 'Syncing...' : assessment.synced_at ? 'Re-sync' : 'Sync Now'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

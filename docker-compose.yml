@@ -1,0 +1,49 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-cpted}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-cpted}
+      POSTGRES_DB: ${DB_NAME:-cpted}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-cpted}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build:
+      context: ./server
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: 3001
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-cpted}
+      DB_PASSWORD: ${DB_PASSWORD:-cpted}
+      DB_NAME: ${DB_NAME:-cpted}
+      PHOTO_DIR: /data/photos
+      CORS_ORIGIN: "*"
+    volumes:
+      - photos:/data/photos
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./cpted-assessor/dist:/usr/share/nginx/html:ro
+
+volumes:
+  pgdata:
+  photos:

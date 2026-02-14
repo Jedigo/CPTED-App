@@ -7,7 +7,7 @@ import { getScoreColor, getScoreLabel } from '../services/scoring';
 import ConfirmDialog from '../components/ConfirmDialog';
 import type { Assessment, AssessmentStatus } from '../types';
 
-type FilterTab = 'all' | 'in_progress' | 'completed';
+type FilterTab = 'all' | 'in_progress' | 'completed' | 'synced';
 
 function formatDate(iso: string): string {
   try {
@@ -99,6 +99,14 @@ export default function Home() {
   }, [deleteTarget]);
 
   const statusBadge = (status: AssessmentStatus) => {
+    if (status === 'synced') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-blue-100 text-blue-700">
+          <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+          Synced
+        </span>
+      );
+    }
     if (status === 'completed') {
       return (
         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-green-100 text-green-700">
@@ -223,6 +231,14 @@ export default function Home() {
                           <span>{assessment.homeowner_name}</span>
                           <span>&middot;</span>
                           <span>{formatDate(assessment.created_at)}</span>
+                          {assessment.synced_at && (
+                            <>
+                              <span>&middot;</span>
+                              <span className="text-blue-500" title={`Synced ${formatDate(assessment.synced_at)}`}>
+                                Synced
+                              </span>
+                            </>
+                          )}
                         </div>
                       </div>
 
