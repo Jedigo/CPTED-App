@@ -35,9 +35,38 @@ button, a, input, select, textarea {
   min-height: 44px;
 }
 
+/* Inline badges/indicators should not enforce 44px min height */
+span[class*="rounded-full"] {
+  min-height: unset;
+}
+
 /* Safe area padding for iPad notch/home indicator */
 @supports (padding: env(safe-area-inset-bottom)) {
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom);
   }
+}
+
+/* Focus-visible for keyboard accessibility */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--color-blue-medium);
+  outline-offset: 2px;
+}
+
+/* Loading spinner */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-spinner {
+  width: 2rem;
+  height: 2rem;
+  border: 3px solid color-mix(in srgb, var(--color-navy) 20%, transparent);
+  border-top-color: var(--color-navy);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }

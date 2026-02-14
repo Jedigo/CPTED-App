@@ -11,6 +11,8 @@ import {
   getCompletionCounts,
 } from '../services/scoring';
 import { generatePDF } from '../services/pdf';
+import { generateRecommendations, generateQuickWins } from '../services/recommendations';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import RecommendationEditor from '../components/RecommendationEditor';
 import type { Recommendation } from '../types';
 
@@ -18,6 +20,7 @@ const LIABILITY_WAIVER = `This CPTED assessment is provided solely for informati
 
 export default function Summary() {
   const { id } = useParams<{ id: string }>();
+  const online = useOnlineStatus();
 
   const assessment = useLiveQuery(
     () => (id ? db.assessments.get(id) : undefined),
@@ -103,6 +106,15 @@ export default function Summary() {
     [recommendations, persistRecs],
   );
 
+  const handleAutoGenerate = useCallback(() => {
+    if (!id || !itemScores) return;
+    const recs = generateRecommendations(itemScores, id, 5);
+    const qw = generateQuickWins(itemScores, id, 5);
+    setRecommendations(recs);
+    setQuickWins(qw);
+    persistRecs(recs, qw);
+  }, [id, itemScores, persistRecs]);
+
   const [generating, setGenerating] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
 
@@ -142,8 +154,9 @@ export default function Summary() {
     itemScores === undefined
   ) {
     return (
-      <div className="flex items-center justify-center h-screen bg-blue-pale">
-        <p className="text-navy/50 text-lg">Loading summary...</p>
+      <div className="flex flex-col items-center justify-center h-screen bg-blue-pale gap-3">
+        <div className="loading-spinner" />
+        <p className="text-navy/50 text-sm">Loading summary...</p>
       </div>
     );
   }
@@ -181,27 +194,33 @@ export default function Summary() {
   return (
     <div className="min-h-screen bg-blue-pale">
       {/* Header */}
-      <header className="bg-navy text-white px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4 min-w-0">
+      <header className="bg-navy text-white px-4 sm:px-6 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
           <Link
             to={`/assessment/${id}`}
             className="text-white/70 hover:text-white text-sm font-medium flex-shrink-0"
           >
-            &larr; Back to Assessment
+            &larr; Assessment
           </Link>
-          <h1 className="text-lg font-bold truncate">
-            {assessment.address}, {assessment.city}
+          <h1 className="text-base sm:text-lg font-bold truncate">
+            {assessment.address}
           </h1>
         </div>
-        <span
-          className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${
-            isComplete
-              ? 'bg-green-400/20 text-green-300'
-              : 'bg-yellow-400/20 text-yellow-300'
-          }`}
-        >
-          {isComplete ? 'Completed' : 'In Progress'}
-        </span>
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <span
+            className={`w-2 h-2 rounded-full ${online ? 'bg-green-400' : 'bg-red-400'}`}
+            aria-label={online ? 'Online' : 'Offline'}
+          />
+          <span
+            className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${
+              isComplete
+                ? 'bg-green-400/20 text-green-300'
+                : 'bg-yellow-400/20 text-yellow-300'
+            }`}
+          >
+            {isComplete ? 'Completed' : 'In Progress'}
+          </span>
+        </div>
       </header>
 
       <div className="max-w-4xl mx-auto px-6 py-8 space-y-8">
@@ -298,6 +317,29 @@ export default function Summary() {
             </tbody>
           </table>
         </div>
+
+        {/* Auto-generate button */}
+        {itemScores && itemScores.some((s) => s.score !== null) && (
+          <div className="bg-blue-light/50 rounded-xl border border-blue-medium/20 p-4 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-navy">
+                Auto-Generate Recommendations
+              </p>
+              <p className="text-xs text-navy/50 mt-0.5">
+                Analyzes scores to pick the top issues and quick wins. You can edit them after.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleAutoGenerate}
+              className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-blue-medium text-white hover:bg-blue-medium/80 active:scale-95 transition-all flex-shrink-0"
+            >
+              {recommendations.length > 0 || quickWins.length > 0
+                ? 'Regenerate'
+                : 'Generate'}
+            </button>
+          </div>
+        )}
 
         {/* Top 5 Recommendations */}
         <div className="bg-white rounded-xl border border-navy/10 shadow-sm p-6">

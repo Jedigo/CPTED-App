@@ -75,7 +75,8 @@ export default function ChecklistItem({
         <button
           type="button"
           onClick={() => setShowNote(!showNote)}
-          className={`px-3 h-11 rounded-lg text-sm font-medium border-2 transition-colors ${
+          aria-label={itemScore.notes ? 'Edit note' : 'Add note'}
+          className={`px-3 h-11 rounded-lg text-sm font-medium border-2 transition-all active:scale-95 ${
             itemScore.notes
               ? 'bg-blue-medium text-white border-blue-medium'
               : 'bg-white border-navy/20 text-navy/50 hover:border-navy/40'
@@ -97,7 +98,8 @@ export default function ChecklistItem({
           type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={saving}
-          className={`px-3 h-11 rounded-lg text-sm font-medium border-2 transition-colors ${
+          aria-label={photoCount > 0 ? `${photoCount} photos attached, add more` : 'Capture photo'}
+          className={`px-3 h-11 rounded-lg text-sm font-medium border-2 transition-all active:scale-95 ${
             photoCount > 0
               ? 'bg-blue-medium text-white border-blue-medium'
               : 'bg-white border-navy/20 text-navy/50 hover:border-navy/40'

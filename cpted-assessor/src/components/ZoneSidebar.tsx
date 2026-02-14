@@ -30,7 +30,7 @@ export default function ZoneSidebar({
   onSelectZone,
 }: ZoneSidebarProps) {
   return (
-    <nav className="w-56 bg-navy-dark flex-shrink-0 overflow-y-auto border-r border-navy">
+    <nav className="w-56 h-full bg-navy-dark flex-shrink-0 overflow-y-auto border-r border-navy">
       <div className="py-2">
         {ZONES.map((zone) => {
           const isActive = zone.key === activeZoneKey;

@@ -6,12 +6,15 @@ import { db } from '../db/database';
 import { ZONES } from '../data/zones';
 import type { ItemScore } from '../types';
 import { persistZoneScore, persistOverallScore, persistAllScores } from '../services/scoring';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import ZoneSidebar from '../components/ZoneSidebar';
 import ZoneView from '../components/ZoneView';
 
 export default function Assessment() {
   const { id } = useParams<{ id: string }>();
+  const online = useOnlineStatus();
   const [activeZoneKey, setActiveZoneKey] = useState(ZONES[0].key);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const mainRef = useRef<HTMLDivElement>(null);
   const initRef = useRef(false);
   const persistTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
@@ -140,11 +143,17 @@ export default function Assessment() {
     }
   }
 
+  const handleSelectZone = useCallback((zoneKey: string) => {
+    setActiveZoneKey(zoneKey);
+    setSidebarOpen(false);
+  }, []);
+
   // Loading state
   if (itemScores === undefined) {
     return (
-      <div className="flex items-center justify-center h-screen bg-blue-pale">
-        <p className="text-navy/50 text-lg">Loading assessment...</p>
+      <div className="flex flex-col items-center justify-center h-screen bg-blue-pale gap-3">
+        <div className="loading-spinner" />
+        <p className="text-navy/50 text-sm">Loading assessment...</p>
       </div>
     );
   }
@@ -167,25 +176,41 @@ export default function Assessment() {
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-blue-pale">
       {/* Header */}
-      <header className="bg-navy text-white px-6 py-3 flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-4 min-w-0">
+      <header className="bg-navy text-white px-4 sm:px-6 py-3 flex items-center justify-between flex-shrink-0">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+          {/* Sidebar toggle (portrait only) */}
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="lg:hidden text-white/70 hover:text-white p-1"
+            aria-label="Toggle zone sidebar"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
           <Link
             to="/"
-            className="text-white/70 hover:text-white text-sm font-medium flex-shrink-0"
+            className="text-white/70 hover:text-white text-sm font-medium flex-shrink-0 hidden sm:inline"
           >
-            &larr; Back
+            &larr; Home
           </Link>
-          <h1 className="text-lg font-bold truncate">
-            {assessment.address}, {assessment.city}
+          <h1 className="text-base sm:text-lg font-bold truncate">
+            {assessment.address}
           </h1>
         </div>
-        <div className="flex items-center gap-4 flex-shrink-0">
-          <span className="text-white/50 text-sm">
-            Zone {activeZoneIndex + 1} of {ZONES.length}
+        <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+          {/* Online/Offline dot */}
+          <span
+            className={`w-2 h-2 rounded-full flex-shrink-0 ${online ? 'bg-green-400' : 'bg-red-400'}`}
+            aria-label={online ? 'Online' : 'Offline'}
+          />
+          <span className="text-white/50 text-sm hidden sm:inline">
+            Zone {activeZoneIndex + 1}/{ZONES.length}
           </span>
           <Link
             to={`/assessment/${id}/summary`}
-            className="px-4 py-2 bg-blue-medium hover:bg-blue-medium/80 rounded-lg text-sm font-medium transition-colors"
+            className="px-4 py-2 bg-blue-medium hover:bg-blue-medium/80 active:scale-95 rounded-lg text-sm font-medium transition-all"
           >
             Summary
           </Link>
@@ -193,12 +218,28 @@ export default function Assessment() {
       </header>
 
       {/* Body: sidebar + main content */}
-      <div className="flex flex-1 overflow-hidden">
-        <ZoneSidebar
-          activeZoneKey={activeZoneKey}
-          itemScoresByZone={itemScoresByZone}
-          onSelectZone={setActiveZoneKey}
-        />
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* Mobile sidebar overlay */}
+        {sidebarOpen && (
+          <div
+            className="lg:hidden fixed inset-0 top-[52px] bg-black/30 z-20"
+            onClick={() => setSidebarOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+
+        {/* Sidebar: always visible on landscape/desktop, overlay on portrait */}
+        <div
+          className={`${
+            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          } lg:translate-x-0 fixed lg:static top-[52px] bottom-0 left-0 z-30 transition-transform duration-200 ease-in-out`}
+        >
+          <ZoneSidebar
+            activeZoneKey={activeZoneKey}
+            itemScoresByZone={itemScoresByZone}
+            onSelectZone={handleSelectZone}
+          />
+        </div>
 
         <main ref={mainRef} className="flex-1 overflow-y-auto p-6">
           <ZoneView
@@ -214,18 +255,26 @@ export default function Assessment() {
               type="button"
               onClick={goToPrevZone}
               disabled={activeZoneIndex === 0}
-              className="px-6 py-3 rounded-xl font-semibold text-sm transition-colors bg-white border border-navy/20 text-navy hover:bg-blue-pale disabled:opacity-30 disabled:cursor-not-allowed"
+              className="px-6 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 bg-white border border-navy/20 text-navy hover:bg-blue-pale disabled:opacity-30 disabled:cursor-not-allowed"
             >
               &larr; Previous Zone
             </button>
-            <button
-              type="button"
-              onClick={goToNextZone}
-              disabled={activeZoneIndex === ZONES.length - 1}
-              className="px-6 py-3 rounded-xl font-semibold text-sm transition-colors bg-navy text-white hover:bg-navy-light disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              Next Zone &rarr;
-            </button>
+            {activeZoneIndex === ZONES.length - 1 ? (
+              <Link
+                to={`/assessment/${id}/summary`}
+                className="px-6 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 bg-green-600 text-white hover:bg-green-700"
+              >
+                Go to Summary &rarr;
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={goToNextZone}
+                className="px-6 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 bg-navy text-white hover:bg-navy-light"
+              >
+                Next Zone &rarr;
+              </button>
+            )}
           </div>
         </main>
       </div>
