@@ -226,7 +226,7 @@ npm run type-check    # TypeScript type checking
 
 ## Current Status
 
-**MVP Steps 1–5 complete.** Next up: Step 6 (Photo Capture), Step 7 (Score Calculations).
+**MVP Phase 1 complete (Steps 1–12).** All core features working end-to-end. PDF report redesigned for resident audience. See TODO list in auto-memory for pending polish items.
 
 Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch: `main`)
 
@@ -243,4 +243,15 @@ Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch:
 - Step 4: NewAssessment form with property/assessor details
 - Step 5: Zone navigator — ScoreButtons, ChecklistItem, PrincipleSection, ZoneSummary, ZoneView, ZoneSidebar, Assessment page
 - Git repo initialized and pushed to GitHub
-- Next: Step 6 (Photo Capture), Step 7 (Score Calculations)
+
+### 2026-02-14 — Steps 10–12: MVP Complete + PDF Redesign
+- Step 10: Verified SW registration + precaching (12 entries), added online/offline indicator to all page headers via `useOnlineStatus` hook
+- Step 11: Full Home screen rewrite — assessment list with live queries, filter tabs (All/In Progress/Completed), progress bars, delete with ConfirmDialog modal, Mark Complete/Reopen from card footer
+- Step 12: Loading spinners, portrait-responsive sidebar with hamburger toggle, touch feedback (`active:scale`), `aria-label` on icon buttons, `focus-visible` styles
+- PDF report redesigned for residents: replaced assessor instructions with resident-friendly zone descriptions, grouped findings as Areas Requiring Attention (1-2) / Meets Basic Standards (3, summarized) / Positive Observations (4-5)
+- Score-3 items no longer listed individually unless ≤3 or has assessor notes — shows summary count instead
+- Added auto-generate recommendations: analyzes scores to pick top 5 issues and quick wins by severity/principle, editable after generation
+- Zone 7 "Next Zone" replaced with "Go to Summary" button
+- Fixed PDF bug: item matching used `item_order` (global per zone) instead of `item_text`, causing dashes for all principles after the first
+- Created `/close-session` global skill at `~/.claude/skills/close-session/SKILL.md`
+- Next: PDF report visual polish (see `~/.claude/projects/.../memory/todo.md`)
