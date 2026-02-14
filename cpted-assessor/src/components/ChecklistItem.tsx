@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { ItemScore } from '../types';
 import ScoreButtons from './ScoreButtons';
 import PhotoThumbnail from './PhotoThumbnail';
+import PhotoViewer from './PhotoViewer';
 import { savePhoto, deletePhoto } from '../services/photos';
 
 interface ChecklistItemProps {
@@ -18,6 +19,7 @@ export default function ChecklistItem({
   const [showNote, setShowNote] = useState(!!itemScore.notes);
   const [noteText, setNoteText] = useState(itemScore.notes);
   const [saving, setSaving] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -111,10 +113,24 @@ export default function ChecklistItem({
 
       {photoCount > 0 && (
         <div className="mt-3 flex gap-2 flex-wrap">
-          {itemScore.photo_ids.map((id) => (
-            <PhotoThumbnail key={id} photoId={id} onDelete={handleDeletePhoto} />
+          {itemScore.photo_ids.map((id, idx) => (
+            <PhotoThumbnail
+              key={id}
+              photoId={id}
+              onDelete={handleDeletePhoto}
+              onClick={() => setViewerIndex(idx)}
+            />
           ))}
         </div>
+      )}
+
+      {viewerIndex !== null && (
+        <PhotoViewer
+          photoIds={itemScore.photo_ids}
+          initialIndex={viewerIndex}
+          onClose={() => setViewerIndex(null)}
+          onDelete={(photoId) => handleDeletePhoto(photoId)}
+        />
       )}
 
       {showNote && (

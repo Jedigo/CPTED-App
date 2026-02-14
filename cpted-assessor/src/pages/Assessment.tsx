@@ -10,12 +10,14 @@ import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import ZoneSidebar from '../components/ZoneSidebar';
 import ZoneView from '../components/ZoneView';
 import HeaderBackButton from '../components/HeaderBackButton';
+import ScoreReference from '../components/ScoreReference';
 
 export default function Assessment() {
   const { id } = useParams<{ id: string }>();
   const online = useOnlineStatus();
   const [activeZoneKey, setActiveZoneKey] = useState(ZONES[0].key);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [scoreRefOpen, setScoreRefOpen] = useState(false);
   const mainRef = useRef<HTMLDivElement>(null);
   const initRef = useRef(false);
   const persistTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
@@ -196,6 +198,15 @@ export default function Assessment() {
           </h1>
         </div>
         <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+          {/* Score reference toggle */}
+          <button
+            type="button"
+            onClick={() => setScoreRefOpen(!scoreRefOpen)}
+            className="px-3 py-1.5 rounded-lg border border-white/20 hover:bg-white/10 text-white/70 hover:text-white active:scale-95 transition-all text-xs font-medium"
+            aria-label="Score reference"
+          >
+            Score Guide
+          </button>
           {/* Online/Offline dot */}
           <span
             className={`w-2 h-2 rounded-full flex-shrink-0 ${online ? 'bg-green-400' : 'bg-red-400'}`}
@@ -212,6 +223,8 @@ export default function Assessment() {
           </Link>
         </div>
       </header>
+
+      <ScoreReference open={scoreRefOpen} onClose={() => setScoreRefOpen(false)} />
 
       {/* Body: sidebar + main content */}
       <div className="flex flex-1 overflow-hidden relative">

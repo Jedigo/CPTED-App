@@ -5,9 +5,10 @@ import { db } from '../db/database';
 interface PhotoThumbnailProps {
   photoId: string;
   onDelete: (photoId: string) => void;
+  onClick?: () => void;
 }
 
-export default function PhotoThumbnail({ photoId, onDelete }: PhotoThumbnailProps) {
+export default function PhotoThumbnail({ photoId, onDelete, onClick }: PhotoThumbnailProps) {
   const photo = useLiveQuery(() => db.photos.get(photoId), [photoId]);
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
 
@@ -30,7 +31,10 @@ export default function PhotoThumbnail({ photoId, onDelete }: PhotoThumbnailProp
       <img
         src={objectUrl}
         alt="Captured photo"
-        className="w-20 h-20 rounded-lg object-cover border border-navy/10"
+        className={`w-20 h-20 rounded-lg object-cover border border-navy/10${onClick ? ' cursor-pointer' : ''}`}
+        onClick={onClick}
+        role={onClick ? 'button' : undefined}
+        aria-label={onClick ? 'View photo' : undefined}
       />
       <button
         type="button"
