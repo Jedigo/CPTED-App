@@ -9,6 +9,7 @@ import { persistZoneScore, persistOverallScore, persistAllScores } from '../serv
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import ZoneSidebar from '../components/ZoneSidebar';
 import ZoneView from '../components/ZoneView';
+import HeaderBackButton from '../components/HeaderBackButton';
 
 export default function Assessment() {
   const { id } = useParams<{ id: string }>();
@@ -182,19 +183,14 @@ export default function Assessment() {
           <button
             type="button"
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="lg:hidden text-white/70 hover:text-white p-1"
+            className="lg:hidden px-2.5 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white active:scale-95 transition-all"
             aria-label="Toggle zone sidebar"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <Link
-            to="/"
-            className="text-white/70 hover:text-white text-sm font-medium flex-shrink-0 hidden sm:inline"
-          >
-            &larr; Home
-          </Link>
+          <HeaderBackButton to="/" label="Home" className="hidden sm:inline-flex flex-shrink-0" />
           <h1 className="text-base sm:text-lg font-bold truncate">
             {assessment.address}
           </h1>

@@ -14,6 +14,7 @@ import { generatePDF } from '../services/pdf';
 import { generateRecommendations, generateQuickWins } from '../services/recommendations';
 import { syncAssessment, checkServerHealth } from '../services/sync';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import HeaderBackButton from '../components/HeaderBackButton';
 import RecommendationEditor from '../components/RecommendationEditor';
 import type { Recommendation } from '../types';
 
@@ -224,12 +225,7 @@ export default function Summary() {
       {/* Header */}
       <header className="bg-navy text-white px-4 sm:px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-          <Link
-            to={`/assessment/${id}`}
-            className="text-white/70 hover:text-white text-sm font-medium flex-shrink-0"
-          >
-            &larr; Assessment
-          </Link>
+          <HeaderBackButton to={`/assessment/${id}`} label="Assessment" className="flex-shrink-0" />
           <h1 className="text-base sm:text-lg font-bold truncate">
             {assessment.address}
           </h1>

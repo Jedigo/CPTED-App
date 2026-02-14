@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { v4 as uuidv4 } from 'uuid'
 import { db } from '../db/database'
 import { ZONES } from '../data/zones'
+import HeaderBackButton from '../components/HeaderBackButton'
 import type {
   Assessment,
   AssessmentType,
@@ -122,15 +123,10 @@ export default function NewAssessment() {
   return (
     <div className="min-h-full bg-blue-pale">
       {/* Header */}
-      <div className="bg-navy text-white px-6 py-4 flex items-center gap-4">
-        <Link
-          to="/"
-          className="text-white/80 hover:text-white text-sm font-medium flex items-center gap-1"
-        >
-          &larr; Back
-        </Link>
+      <header className="bg-navy text-white px-6 py-4 flex items-center gap-4">
+        <HeaderBackButton to="/" label="Back" />
         <h1 className="text-xl font-bold">New Assessment</h1>
-      </div>
+      </header>
 
       <form onSubmit={handleSubmit} className="max-w-3xl mx-auto p-6 space-y-6 pb-24">
         {/* Property Information */}
