@@ -168,7 +168,7 @@ The full checklist item text lives in `src/data/zones.ts` and must match the CPT
 1. `zones.ts` is the **source of truth** for all checklist content
 2. Scoring is **1-5** (not 0-5) — no zero score exists
 3. **N/A items excluded** from all score calculations
-4. Photos stored as **blobs** in IndexedDB, NOT base64 strings (iPad performance)
+4. Photos stored as **base64 data URL strings** in IndexedDB (NOT Blobs — Safari detaches Blob data from IndexedDB, making it unreadable)
 5. PDF must include the **liability waiver verbatim** (see project plan)
 6. PWA manifest app name: **"CPTED Assessor"**
 7. `property_type` only implements `single_family_residential` for now — design UI to be expandable
@@ -226,7 +226,7 @@ npm run type-check    # TypeScript type checking
 
 ## Current Status
 
-**Phase 2 backend deployed and running.** Server (Express 5 + Drizzle ORM + PostgreSQL) deployed via Docker Compose on `cpted-server` VM (10.21.1.138). iPad PWA syncs assessments to PostgreSQL over Tailscale. Redeploy with `./deploy.sh`.
+**Phase 2 backend deployed. PDF report polished with 7 visual improvements.** Photo storage migrated from Blob to base64 data URLs to fix Safari IndexedDB bug. Known bug: auto-generate recommendations button broken. Redeploy with `./deploy.sh`.
 
 Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch: `main`)
 
@@ -267,3 +267,19 @@ Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch:
 - Fixed: `state` column widened from varchar(2) to varchar(50), sync transaction rewritten to use Drizzle `db.transaction()` instead of manual BEGIN/COMMIT on pool client
 - Verified iPad → Tailscale → server sync end-to-end
 - Next: commit Phase 2 code, test server-side PDF download, photo sync from iPad
+
+### 2026-02-14 — PDF Report Polish + Photo Storage Fix
+- **7 PDF visual improvements** applied to both client (`cpted-assessor/src/services/pdf.ts`) and server (`server/src/services/pdf.ts`):
+  1. Removed score legend table from resident-facing report
+  2. Added auto-generated executive summary paragraph
+  3. Added zone score color bars (horizontal bar chart)
+  4. Improved score-3 section → "Opportunities for Enhancement" with intro text, 3-bullet cap
+  5. Improved positive observations → grouped by Excellent/Good, inline notes
+  6. Photos now 2-per-row with checklist item text captions (no GPS)
+  7. Visual polish — accent lines, section dividers, better spacing
+- **Fixed Safari IndexedDB Blob bug**: Photos stored as Blobs became unreadable on iPad Safari (FileReader, arrayBuffer(), and createObjectURL+fetch all failed). Migrated photo storage from `blob: Blob` to `data: string` (base64 data URL) — `canvas.toDataURL()` at capture time, stored directly in IndexedDB
+- Updated Photo type, `compressImage()`, `savePhoto()`, `PhotoThumbnail`, `PhotoViewer`, `sync.ts`, and `pdf.ts` to use new format with legacy Blob fallback
+- Added version indicator (`v0.6.1`) to Home screen footer
+- Versions: `cpted-assessor` 0.6.1, `server` 0.1.1
+- **Known bug:** Auto-generate recommendations button on Summary page is broken
+- Next: fix recommendations bug, add server-side report storage for cross-device access

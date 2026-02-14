@@ -84,8 +84,17 @@ export async function syncAssessment(assessmentId: string): Promise<SyncResult> 
 async function uploadPhoto(assessmentId: string, photo: Photo): Promise<void> {
   const formData = new FormData();
 
-  // Convert Blob to File for upload
-  const file = new File([photo.blob], photo.filename || `${photo.id}.jpg`, {
+  // Convert base64 data URL (or legacy Blob) to File for upload
+  let fileData: Blob;
+  if (photo.data) {
+    const resp = await fetch(photo.data);
+    fileData = await resp.blob();
+  } else if (photo.blob) {
+    fileData = photo.blob;
+  } else {
+    return; // No photo data available
+  }
+  const file = new File([fileData], photo.filename || `${photo.id}.jpg`, {
     type: photo.mime_type || 'image/jpeg',
   });
   formData.append('photo', file);

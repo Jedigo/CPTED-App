@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/database';
 
@@ -10,17 +10,16 @@ interface PhotoThumbnailProps {
 
 export default function PhotoThumbnail({ photoId, onDelete, onClick }: PhotoThumbnailProps) {
   const photo = useLiveQuery(() => db.photos.get(photoId), [photoId]);
-  const [objectUrl, setObjectUrl] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (photo?.blob) {
-      const url = URL.createObjectURL(photo.blob);
-      setObjectUrl(url);
-      return () => URL.revokeObjectURL(url);
-    }
-  }, [photo?.blob]);
+  // Support both new format (data: base64 string) and legacy (blob: Blob)
+  const src = useMemo(() => {
+    if (!photo) return null;
+    if (photo.data) return photo.data;
+    if (photo.blob) return URL.createObjectURL(photo.blob);
+    return null;
+  }, [photo]);
 
-  if (!photo || !objectUrl) {
+  if (!photo || !src) {
     return (
       <div className="w-20 h-20 rounded-lg bg-gray-100 border border-navy/10 animate-pulse flex-shrink-0" />
     );
@@ -29,7 +28,7 @@ export default function PhotoThumbnail({ photoId, onDelete, onClick }: PhotoThum
   return (
     <div className="relative w-20 h-20 flex-shrink-0 group">
       <img
-        src={objectUrl}
+        src={src}
         alt="Captured photo"
         className={`w-20 h-20 rounded-lg object-cover border border-navy/10${onClick ? ' cursor-pointer' : ''}`}
         onClick={onClick}

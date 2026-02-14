@@ -40,16 +40,6 @@ function getScoreBgHex(score: number): string {
   return '#ECFDF5'; // emerald-50
 }
 
-// --- Blob → base64 ---
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
-
 // --- Filename generator ---
 function generateFilename(assessment: Assessment): string {
   const addr = assessment.address
@@ -88,7 +78,6 @@ interface PDFData {
   zoneScores: ZoneScore[];
   itemScores: ItemScore[];
   photos: Photo[];
-  photoBase64Map: Map<string, string>; // photo id → base64
 }
 
 async function gatherAssessmentData(assessmentId: string): Promise<PDFData> {
@@ -104,18 +93,7 @@ async function gatherAssessmentData(assessmentId: string): Promise<PDFData> {
 
   if (!assessment) throw new Error('Assessment not found');
 
-  // Convert photo blobs to base64 for embedding
-  const photoBase64Map = new Map<string, string>();
-  for (const photo of photos) {
-    try {
-      const b64 = await blobToBase64(photo.blob);
-      photoBase64Map.set(photo.id, b64);
-    } catch {
-      // Skip photos that fail to convert
-    }
-  }
-
-  return { assessment, zoneScores, itemScores, photos, photoBase64Map };
+  return { assessment, zoneScores, itemScores, photos };
 }
 
 // --- Page helpers ---
@@ -244,55 +222,119 @@ function renderCoverPage(doc: jsPDF, data: PDFData): void {
   addPageFooter(doc, 1);
 }
 
-function renderLegendAndSummary(doc: jsPDF, data: PDFData): void {
+function renderSummaryPage(doc: jsPDF, data: PDFData): void {
   doc.addPage();
   const pageNum = doc.getNumberOfPages();
   let y = 20;
 
-  // Scoring legend
+  // Page title
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(NAVY);
-  doc.text('Scoring Legend', PAGE_MARGIN, y);
+  doc.text('Assessment Summary', PAGE_MARGIN, y);
+  y += 8;
+
+  // --- Executive Summary Paragraph ---
+  const totalScored = data.itemScores.filter(
+    (s) => s.score !== null && !s.is_na,
+  ).length;
+  const overall = data.assessment.overall_score;
+  const attentionItems = data.itemScores.filter(
+    (s) => s.score !== null && !s.is_na && s.score! <= 2,
+  );
+  const strongItems = data.itemScores.filter(
+    (s) => s.score !== null && !s.is_na && s.score! >= 4,
+  );
+
+  const scoredZones = ZONES.map((zone) => {
+    const zs = data.zoneScores.find((z) => z.zone_key === zone.key);
+    return { name: zone.name, score: zs?.average_score ?? null };
+  }).filter((z): z is { name: string; score: number } => z.score !== null);
+
+  scoredZones.sort((a, b) => a.score - b.score);
+  const worstZones = scoredZones.filter((z) => z.score < 3).slice(0, 2);
+  const bestZones = scoredZones.filter((z) => z.score >= 4).slice(-2).reverse();
+
+  let narrative = `This assessment evaluated ${data.assessment.address} across seven residential security zones, covering ${totalScored} checklist items.`;
+  if (overall !== null) {
+    narrative += ` The property received an overall score of ${overall.toFixed(1)} (${getScoreLabel(overall)}).`;
+  }
+  narrative += ` ${attentionItems.length} item${attentionItems.length === 1 ? ' was' : 's were'} identified as requiring attention, while ${strongItems.length} item${strongItems.length === 1 ? '' : 's'} demonstrated strong security practices.`;
+  if (worstZones.length > 0) {
+    narrative += ` Key areas of concern were found in ${worstZones.map((z) => z.name).join(' and ')}.`;
+  }
+  if (bestZones.length > 0) {
+    narrative += ` Notable strengths were observed in ${bestZones.map((z) => z.name).join(' and ')}.`;
+  }
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(60);
+  const narrativeLines = doc.splitTextToSize(narrative, CONTENT_WIDTH);
+  doc.text(narrativeLines, PAGE_MARGIN, y);
+  y += narrativeLines.length * 4 + 6;
+
+  // Horizontal rule
+  doc.setDrawColor(LIGHT_BLUE);
+  doc.setLineWidth(0.3);
+  doc.line(PAGE_MARGIN, y, PAGE_WIDTH - PAGE_MARGIN, y);
+  y += 8;
+
+  // --- Zone Score Color Bars ---
+  const BAR_MAX_WIDTH = 100;
+  const BAR_HEIGHT = 6;
+  const BAR_GAP = 5;
+  const LABEL_WIDTH = 55;
+
+  for (const zone of ZONES) {
+    const zs = data.zoneScores.find((z) => z.zone_key === zone.key);
+    const score = zs?.average_score ?? null;
+
+    // Zone name
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(NAVY);
+    doc.text(zone.name, PAGE_MARGIN, y + BAR_HEIGHT * 0.7);
+
+    const barX = PAGE_MARGIN + LABEL_WIDTH;
+
+    if (score !== null && score !== undefined) {
+      const barWidth = (score / 5) * BAR_MAX_WIDTH;
+      doc.setFillColor(getScoreColorHex(score));
+      doc.roundedRect(barX, y, barWidth, BAR_HEIGHT, 1.5, 1.5, 'F');
+
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(getScoreColorHex(score));
+      doc.text(score.toFixed(1), barX + BAR_MAX_WIDTH + 5, y + BAR_HEIGHT * 0.75);
+    } else {
+      // Gray placeholder line
+      doc.setDrawColor(200);
+      doc.setLineWidth(0.3);
+      doc.line(barX, y + BAR_HEIGHT / 2, barX + BAR_MAX_WIDTH, y + BAR_HEIGHT / 2);
+
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(180);
+      doc.text('\u2014', barX + BAR_MAX_WIDTH + 5, y + BAR_HEIGHT * 0.75);
+    }
+
+    y += BAR_HEIGHT + BAR_GAP;
+  }
+
   y += 3;
 
-  autoTable(doc, {
-    startY: y,
-    head: [['Score', 'Label', 'Description']],
-    body: [
-      ['1', 'Critical', 'Immediate action required — significant vulnerability'],
-      ['2', 'Deficient', 'Notable concern — should be addressed promptly'],
-      ['3', 'Adequate', 'Meets basic standard but could be improved'],
-      ['4', 'Good', 'Above average — minor improvements possible'],
-      ['5', 'Excellent', 'Best practice standard met'],
-      ['N/A', 'Not Applicable', 'Item does not apply to this property'],
-    ],
-    margin: { left: PAGE_MARGIN, right: PAGE_MARGIN },
-    theme: 'grid',
-    headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 9 },
-    bodyStyles: { fontSize: 9, textColor: [50, 50, 50] },
-    columnStyles: {
-      0: { cellWidth: 15, halign: 'center', fontStyle: 'bold' },
-      1: { cellWidth: 25, fontStyle: 'bold' },
-      2: { cellWidth: 'auto' },
-    },
-    didParseCell(hookData) {
-      if (hookData.section === 'body' && hookData.column.index === 0) {
-        const val = hookData.cell.raw as string;
-        const num = parseInt(val, 10);
-        if (!isNaN(num)) {
-          hookData.cell.styles.textColor = getScoreColorHex(num);
-        }
-      }
-    },
-  });
+  // Horizontal rule
+  doc.setDrawColor(LIGHT_BLUE);
+  doc.setLineWidth(0.3);
+  doc.line(PAGE_MARGIN, y, PAGE_WIDTH - PAGE_MARGIN, y);
+  y += 8;
 
-  // Zone summary table
-  y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 15;
-  doc.setFontSize(14);
+  // --- Zone Summary Table ---
+  doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(NAVY);
-  doc.text('Zone Summary', PAGE_MARGIN, y);
+  doc.text('Detailed Zone Summary', PAGE_MARGIN, y);
   y += 3;
 
   const zoneRows = ZONES.map((zone) => {
@@ -303,8 +345,8 @@ function renderLegendAndSummary(doc: jsPDF, data: PDFData): void {
     return [
       String(zone.order),
       zone.name,
-      avg !== null && avg !== undefined ? avg.toFixed(1) : '—',
-      avg !== null && avg !== undefined ? getScoreLabel(avg) : '—',
+      avg !== null && avg !== undefined ? avg.toFixed(1) : '\u2014',
+      avg !== null && avg !== undefined ? getScoreLabel(avg) : '\u2014',
       `${counts.scored} / ${counts.total}`,
       zs?.completed ? 'Complete' : counts.scored > 0 ? 'Partial' : 'Not Started',
     ];
@@ -333,7 +375,6 @@ function renderLegendAndSummary(doc: jsPDF, data: PDFData): void {
           hookData.cell.styles.textColor = getScoreColorHex(val);
         }
       }
-      // Color-code row backgrounds
       if (hookData.section === 'body') {
         const raw = hookData.row.raw;
         if (Array.isArray(raw)) {
@@ -386,10 +427,15 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
     // Zone average badge on right side of header
     const zs = data.zoneScores.find((z) => z.zone_key === zone.key);
     if (zs?.average_score !== null && zs?.average_score !== undefined) {
-      const scoreText = `${zs.average_score.toFixed(1)} — ${getScoreLabel(zs.average_score)}`;
+      const scoreText = `${zs.average_score.toFixed(1)} \u2014 ${getScoreLabel(zs.average_score)}`;
       doc.text(scoreText, PAGE_WIDTH - PAGE_MARGIN - 4, y + 8, { align: 'right' });
     }
-    y += 17;
+
+    // Accent line under header bar
+    doc.setDrawColor(NAVY);
+    doc.setLineWidth(0.3);
+    doc.line(PAGE_MARGIN, y + 12.5, PAGE_WIDTH - PAGE_MARGIN, y + 12.5);
+    y += 18;
 
     // Resident-friendly zone description
     const residentDesc = ZONE_RESIDENT_DESCRIPTIONS[zone.key];
@@ -399,21 +445,23 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
       doc.setTextColor(80);
       const descLines = doc.splitTextToSize(residentDesc, CONTENT_WIDTH);
       doc.text(descLines, PAGE_MARGIN, y);
-      y += descLines.length * 4 + 5;
+      y += descLines.length * 4 + 6;
     }
 
     // Categorize scored items for this zone
     const zoneItems = data.itemScores.filter((s) => s.zone_key === zone.key);
     const concerns = zoneItems.filter(
-      (s) => s.score !== null && !s.is_na && s.score <= 2,
-    ); // Critical & Deficient
+      (s) => s.score !== null && !s.is_na && s.score! <= 2,
+    );
     const improvements = zoneItems.filter(
       (s) => s.score !== null && !s.is_na && s.score === 3,
-    ); // Adequate
+    );
     const strengths = zoneItems.filter(
-      (s) => s.score !== null && !s.is_na && s.score >= 4,
-    ); // Good & Excellent
+      (s) => s.score !== null && !s.is_na && s.score! >= 4,
+    );
     const naItems = zoneItems.filter((s) => s.is_na);
+
+    let hasPriorSection = false;
 
     // --- Areas Requiring Attention (scores 1-2) ---
     if (concerns.length > 0) {
@@ -466,99 +514,120 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
 
       y =
         (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable
-          .finalY + 5;
+          .finalY + 8;
+      hasPriorSection = true;
     }
 
-    // --- Meets Basic Standards (score 3) ---
+    // --- Opportunities for Enhancement (score 3) ---
     if (improvements.length > 0) {
-      y = ensureSpace(doc, 15, y);
+      // Divider between sections
+      if (hasPriorSection) {
+        doc.setDrawColor(LIGHT_BLUE);
+        doc.setLineWidth(0.3);
+        doc.line(PAGE_MARGIN + 5, y, PAGE_WIDTH - PAGE_MARGIN - 5, y);
+        y += 6;
+      }
 
-      // Items with assessor notes are worth showing individually regardless of count
+      y = ensureSpace(doc, 20, y);
+
       const withNotes = improvements.filter((s) => s.notes.trim());
       const withoutNotes = improvements.filter((s) => !s.notes.trim());
 
-      if (improvements.length <= 3 || withNotes.length > 0) {
-        // Few enough to list, or some have notes worth showing
-        doc.setFillColor('#FEFCE8');
-        doc.rect(PAGE_MARGIN, y, CONTENT_WIDTH, 8, 'F');
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor('#854D0E');
-        doc.text('Meets Basic Standards', PAGE_MARGIN + 3, y + 5.5);
-        y += 10;
+      // Section header
+      doc.setFillColor('#FEFCE8');
+      doc.rect(PAGE_MARGIN, y, CONTENT_WIDTH, 8, 'F');
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor('#854D0E');
+      doc.text('Opportunities for Enhancement', PAGE_MARGIN + 3, y + 5.5);
+      y += 10;
 
-        if (withNotes.length > 0) {
-          // Show items that have assessor notes in a table
-          const noteRows = withNotes.map((item) => [
-            item.item_text,
-            item.notes,
-          ]);
+      // Intro sentence
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'italic');
+      doc.setTextColor(80);
+      doc.text(
+        'The following items meet basic security standards but present opportunities for enhancement:',
+        PAGE_MARGIN + 2,
+        y,
+      );
+      y += 5;
 
-          autoTable(doc, {
-            startY: y,
-            head: [['Observation', 'Assessor Notes']],
-            body: noteRows,
-            margin: { left: PAGE_MARGIN, right: PAGE_MARGIN },
-            theme: 'grid',
-            headStyles: {
-              fillColor: '#FEF9C3',
-              textColor: '#854D0E',
-              fontStyle: 'bold',
-              fontSize: 8,
-            },
-            bodyStyles: { fontSize: 8, textColor: [50, 50, 50], cellPadding: 2.5 },
-            columnStyles: {
-              0: { cellWidth: 'auto' },
-              1: { cellWidth: 45, fontSize: 7 },
-            },
-          });
+      if (withNotes.length > 0) {
+        const noteRows = withNotes.map((item) => [
+          item.item_text,
+          item.notes,
+        ]);
 
-          y =
-            (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable
-              .finalY + 3;
-        }
+        autoTable(doc, {
+          startY: y,
+          head: [['Observation', 'Assessor Notes']],
+          body: noteRows,
+          margin: { left: PAGE_MARGIN, right: PAGE_MARGIN },
+          theme: 'grid',
+          headStyles: {
+            fillColor: '#FEF9C3',
+            textColor: '#854D0E',
+            fontStyle: 'bold',
+            fontSize: 8,
+          },
+          bodyStyles: { fontSize: 8, textColor: [50, 50, 50], cellPadding: 2.5 },
+          columnStyles: {
+            0: { cellWidth: 'auto' },
+            1: { cellWidth: 45, fontSize: 7 },
+          },
+        });
 
-        // Summarize remaining items without notes
-        if (withoutNotes.length > 0) {
-          doc.setFontSize(8);
-          doc.setFont('helvetica', 'normal');
-          doc.setTextColor(100);
-          if (withNotes.length > 0) {
-            // Some were listed above, summarize the rest
-            doc.text(
-              `${withoutNotes.length} additional item${withoutNotes.length === 1 ? '' : 's'} in this zone met basic standards.`,
-              PAGE_MARGIN + 2,
-              y + 2,
-            );
-          } else {
-            // All 3 or fewer, list them as bullets
-            for (const item of withoutNotes) {
-              y = ensureSpace(doc, 6, y);
-              const bulletText = `\u2022  ${item.item_text}`;
-              const lines = doc.splitTextToSize(bulletText, CONTENT_WIDTH - 4);
-              doc.text(lines, PAGE_MARGIN + 2, y);
-              y += lines.length * 3.5 + 1.5;
-            }
-          }
-          y += 5;
-        }
-      } else {
-        // Many items scored 3 with no notes — just a summary line
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(100);
-        doc.text(
-          `${improvements.length} items in this zone met basic standards with room for minor enhancement.`,
-          PAGE_MARGIN,
-          y,
-        );
-        y += 8;
+        y =
+          (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable
+            .finalY + 3;
       }
+
+      if (withoutNotes.length > 0) {
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(80);
+
+        // Show up to 3 bullets, then summarize the rest
+        const showItems = withoutNotes.slice(0, 3);
+        const remainingCount = withoutNotes.length - showItems.length;
+
+        for (const item of showItems) {
+          y = ensureSpace(doc, 6, y);
+          const bulletText = `\u2022  ${item.item_text}`;
+          const lines = doc.splitTextToSize(bulletText, CONTENT_WIDTH - 4);
+          doc.text(lines, PAGE_MARGIN + 2, y);
+          y += lines.length * 3.5 + 1.5;
+        }
+
+        if (remainingCount > 0) {
+          doc.setFontSize(8);
+          doc.setFont('helvetica', 'italic');
+          doc.setTextColor(100);
+          doc.text(
+            `...and ${remainingCount} more item${remainingCount === 1 ? '' : 's'} meeting basic standards.`,
+            PAGE_MARGIN + 6,
+            y,
+          );
+          y += 4;
+        }
+        y += 4;
+      }
+
+      hasPriorSection = true;
     }
 
     // --- Positive Observations (scores 4-5) ---
     if (strengths.length > 0) {
-      y = ensureSpace(doc, 20, y);
+      // Divider between sections
+      if (hasPriorSection) {
+        doc.setDrawColor(LIGHT_BLUE);
+        doc.setLineWidth(0.3);
+        doc.line(PAGE_MARGIN + 5, y, PAGE_WIDTH - PAGE_MARGIN - 5, y);
+        y += 6;
+      }
+
+      y = ensureSpace(doc, 25, y);
       doc.setFillColor('#F0FDF4');
       doc.rect(PAGE_MARGIN, y, CONTENT_WIDTH, 8, 'F');
       doc.setFontSize(9);
@@ -571,28 +640,60 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
       );
       y += 10;
 
-      // Show top strengths as a compact bullet list (not a full table)
+      // Intro sentence
       doc.setFontSize(8);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(60);
+      doc.setFont('helvetica', 'italic');
+      doc.setTextColor(80);
+      doc.text(
+        'Your property demonstrates strong security practices in these areas:',
+        PAGE_MARGIN + 2,
+        y,
+      );
+      y += 5;
 
-      for (const item of strengths) {
-        y = ensureSpace(doc, 6, y);
-        const label = item.score === 5 ? 'Excellent' : 'Good';
-        const bulletText = `\u2022  ${item.item_text}`;
-        const lines = doc.splitTextToSize(bulletText, CONTENT_WIDTH - 30);
-        doc.text(lines, PAGE_MARGIN + 2, y);
+      // Group Excellent (5) first, then Good (4)
+      const excellent = strengths.filter((s) => s.score === 5);
+      const good = strengths.filter((s) => s.score === 4);
 
-        // Rating label on the right
+      for (const group of [
+        { items: excellent, label: 'Excellent', score: 5 },
+        { items: good, label: 'Good', score: 4 },
+      ]) {
+        if (group.items.length === 0) continue;
+
+        // Sub-label
+        doc.setFontSize(7);
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(getScoreColorHex(item.score!));
-        doc.text(label, PAGE_WIDTH - PAGE_MARGIN, y, { align: 'right' });
+        doc.setTextColor(getScoreColorHex(group.score));
+        doc.text(group.label.toUpperCase(), PAGE_MARGIN + 2, y);
+        y += 4;
+
+        doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(60);
 
-        y += lines.length * 3.5 + 1.5;
+        for (const item of group.items) {
+          y = ensureSpace(doc, 8, y);
+          const bulletText = `\u2022  ${item.item_text}`;
+          const lines = doc.splitTextToSize(bulletText, CONTENT_WIDTH - 4);
+          doc.text(lines, PAGE_MARGIN + 2, y);
+          y += lines.length * 3.5 + 1;
+
+          // Show assessor notes inline if present
+          if (item.notes.trim()) {
+            doc.setFontSize(7);
+            doc.setFont('helvetica', 'italic');
+            doc.setTextColor(100);
+            const noteLines = doc.splitTextToSize(item.notes.trim(), CONTENT_WIDTH - 12);
+            doc.text(noteLines, PAGE_MARGIN + 8, y);
+            y += noteLines.length * 3 + 1;
+            doc.setFontSize(8);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(60);
+          }
+        }
+        y += 2;
       }
-      y += 3;
     }
 
     // Summary line if nothing notable
@@ -614,10 +715,10 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
       y += 6;
     }
 
-    // Photos for this zone
+    // Photos for this zone (2 per row, item text captions)
     const zonePhotos = data.photos.filter((p) => p.zone_key === zone.key);
     if (zonePhotos.length > 0) {
-      y = ensureSpace(doc, 55, y);
+      y = ensureSpace(doc, 65, y);
 
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
@@ -625,24 +726,39 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
       doc.text('Photos', PAGE_MARGIN, y);
       y += 5;
 
-      const photoWidth = (CONTENT_WIDTH - 10) / 3; // 3 per row with gaps
+      const photoWidth = (CONTENT_WIDTH - 5) / 2; // 2 per row with gap
       let col = 0;
 
       for (const photo of zonePhotos) {
-        const b64 = data.photoBase64Map.get(photo.id);
+        const b64 = photo.data;
         if (!b64) continue;
 
-        y = ensureSpace(doc, 50, y);
+        y = ensureSpace(doc, 60, y);
 
         const x = PAGE_MARGIN + col * (photoWidth + 5);
         try {
           doc.addImage(b64, 'JPEG', x, y, photoWidth, photoWidth * 0.75);
 
-          // Caption under photo
+          // Caption: item text + timestamp (no GPS)
           doc.setFontSize(6);
           doc.setFont('helvetica', 'normal');
-          doc.setTextColor(120);
+          doc.setTextColor(100);
           const captionParts: string[] = [];
+
+          // Look up associated checklist item text
+          if (photo.item_score_id) {
+            const itemScore = data.itemScores.find(
+              (is) => is.id === photo.item_score_id,
+            );
+            if (itemScore) {
+              const itemText =
+                itemScore.item_text.length > 80
+                  ? itemScore.item_text.substring(0, 77) + '...'
+                  : itemScore.item_text;
+              captionParts.push(itemText);
+            }
+          }
+
           if (photo.captured_at) {
             captionParts.push(
               new Date(photo.captured_at).toLocaleString('en-US', {
@@ -653,28 +769,26 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
               }),
             );
           }
-          if (photo.gps_lat !== null && photo.gps_lng !== null) {
-            captionParts.push(
-              `${photo.gps_lat.toFixed(4)}, ${photo.gps_lng.toFixed(4)}`,
-            );
-          }
+
           if (captionParts.length > 0) {
-            doc.text(captionParts.join(' | '), x, y + photoWidth * 0.75 + 3);
+            const captionText = captionParts.join(' \u2014 ');
+            const captionLines = doc.splitTextToSize(captionText, photoWidth);
+            doc.text(captionLines, x, y + photoWidth * 0.75 + 3);
           }
         } catch {
           // Skip photos that fail to render
         }
 
         col++;
-        if (col >= 3) {
+        if (col >= 2) {
           col = 0;
-          y += photoWidth * 0.75 + 8;
+          y += photoWidth * 0.75 + 10;
         }
       }
 
       // If last row wasn't full, advance y
       if (col > 0) {
-        y += photoWidth * 0.75 + 8;
+        y += photoWidth * 0.75 + 10;
       }
     }
 
@@ -890,7 +1004,7 @@ export async function generatePDF(assessmentId: string): Promise<void> {
   });
 
   renderCoverPage(doc, data);
-  renderLegendAndSummary(doc, data);
+  renderSummaryPage(doc, data);
   renderZoneDetails(doc, data);
   renderRecommendations(doc, data);
   renderLiabilityWaiver(doc, data);

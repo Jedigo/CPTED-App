@@ -4,12 +4,13 @@ import type { Photo } from '../types';
 
 /**
  * Compress an image file by resizing to fit within maxDim and re-encoding as JPEG.
+ * Returns a base64 data URL string.
  */
 export function compressImage(
   file: File,
   maxDim = 1920,
   quality = 0.8,
-): Promise<Blob> {
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
@@ -41,18 +42,7 @@ export function compressImage(
       }
 
       ctx.drawImage(img, 0, 0, width, height);
-
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            resolve(blob);
-          } else {
-            reject(new Error('Canvas toBlob returned null'));
-          }
-        },
-        'image/jpeg',
-        quality,
-      );
+      resolve(canvas.toDataURL('image/jpeg', quality));
     };
 
     img.onerror = () => {
@@ -94,7 +84,7 @@ export async function savePhoto(
   zoneKey: string,
 ): Promise<string> {
   // Compress and get GPS in parallel
-  const [blob, gps] = await Promise.all([
+  const [data, gps] = await Promise.all([
     compressImage(file),
     getGPSCoordinates(),
   ]);
@@ -107,7 +97,7 @@ export async function savePhoto(
     item_score_id: itemScoreId,
     zone_key: zoneKey,
     captured_at: new Date().toISOString(),
-    blob,
+    data,
     filename: file.name || `photo_${photoId}.jpg`,
     mime_type: 'image/jpeg',
     gps_lat: gps?.lat ?? null,

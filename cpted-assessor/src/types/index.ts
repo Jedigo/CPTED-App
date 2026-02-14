@@ -61,7 +61,8 @@ export interface Photo {
   item_score_id: string | null
   zone_key: string
   captured_at: string
-  blob: Blob
+  data: string              // base64 data URL (e.g. "data:image/jpeg;base64,...")
+  blob?: Blob               // deprecated — old records may still have this
   filename: string
   mime_type: string
   gps_lat: number | null

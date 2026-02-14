@@ -387,6 +387,9 @@ export default function Home() {
         )}
       </div>
 
+      {/* Version indicator */}
+      <p className="text-center text-[10px] text-navy/20 mt-6">v0.6.1</p>
+
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog
         open={deleteTarget !== null}

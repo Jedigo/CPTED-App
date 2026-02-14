@@ -18,21 +18,13 @@ export default function PhotoViewer({
 }: PhotoViewerProps) {
   const [index, setIndex] = useState(initialIndex);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const currentId = photoIds[index];
   const photo = useLiveQuery(() => db.photos.get(currentId), [currentId]);
 
-  // Build object URL from blob
-  useEffect(() => {
-    if (photo?.blob) {
-      const url = URL.createObjectURL(photo.blob);
-      setObjectUrl(url);
-      return () => URL.revokeObjectURL(url);
-    }
-    setObjectUrl(null);
-  }, [photo?.blob]);
+  // Support both new format (data: base64) and legacy (blob: Blob)
+  const imageSrc = photo?.data || (photo?.blob ? URL.createObjectURL(photo.blob) : null);
 
   // Close if all photos deleted
   useEffect(() => {
@@ -128,9 +120,9 @@ export default function PhotoViewer({
           </button>
         )}
 
-        {objectUrl ? (
+        {imageSrc ? (
           <img
-            src={objectUrl}
+            src={imageSrc}
             alt={`Photo ${index + 1} of ${photoIds.length}`}
             className="max-w-full max-h-full object-contain px-12"
           />
