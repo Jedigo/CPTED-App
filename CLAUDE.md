@@ -263,7 +263,7 @@ Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch:
 - Sync: `POST /api/sync` upserts full payload in a Drizzle transaction, recalculates scores; photos uploaded separately via multipart
 - Frontend: new `sync.ts` service, "Sync to Server" button on Summary page, "Synced" status badge on Home cards
 - Deploy: `docker-compose.yml` (postgres:16-alpine + Node.js app + nginx:alpine), `deploy.sh` (build locally → rsync → docker compose up)
-- Deployed to `cpted-server` VM (Ubuntu 24.04, Tailscale 10.21.1.138) at `~/cpted-app/`
+- Deployed to `cpted-server` VM (Ubuntu 24.04, Tailscale 100.91.180.116) at `~/cpted-app/`
 - Fixed: `state` column widened from varchar(2) to varchar(50), sync transaction rewritten to use Drizzle `db.transaction()` instead of manual BEGIN/COMMIT on pool client
 - Verified iPad → Tailscale → server sync end-to-end
 - Next: commit Phase 2 code, test server-side PDF download, photo sync from iPad

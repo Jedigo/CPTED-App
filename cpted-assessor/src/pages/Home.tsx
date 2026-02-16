@@ -1,13 +1,20 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/database';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { getScoreColor, getScoreLabel } from '../services/scoring';
+import {
+  fetchServerAssessments,
+  pullAssessment,
+  type ServerAssessmentSummary,
+  type PullProgress,
+} from '../services/sync';
 import ConfirmDialog from '../components/ConfirmDialog';
+import ServerAssessmentCard from '../components/ServerAssessmentCard';
 import type { Assessment, AssessmentStatus } from '../types';
 
-type FilterTab = 'all' | 'in_progress' | 'completed' | 'synced';
+type FilterTab = 'all' | 'in_progress' | 'completed' | 'server';
 
 function formatDate(iso: string): string {
   try {
@@ -27,6 +34,14 @@ export default function Home() {
   const [filter, setFilter] = useState<FilterTab>('all');
   const [deleteTarget, setDeleteTarget] = useState<Assessment | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Server tab state
+  const [serverAssessments, setServerAssessments] = useState<ServerAssessmentSummary[]>([]);
+  const [serverLoading, setServerLoading] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [pullingId, setPullingId] = useState<string | null>(null);
+  const [pullProgress, setPullProgress] = useState<PullProgress | null>(null);
+  const [overwriteTarget, setOverwriteTarget] = useState<string | null>(null);
 
   const assessments = useLiveQuery(
     () => db.assessments.orderBy('created_at').reverse().toArray(),
@@ -49,7 +64,7 @@ export default function Home() {
   }, [assessments]);
 
   const filtered = assessments?.filter((a) => {
-    if (filter === 'all') return true;
+    if (filter === 'all' || filter === 'server') return true;
     return a.status === filter;
   });
 
@@ -97,6 +112,54 @@ export default function Home() {
       setDeleteTarget(null);
     }
   }, [deleteTarget]);
+
+  // Load server assessments when Server tab is selected
+  const loadServerAssessments = useCallback(async () => {
+    setServerLoading(true);
+    setServerError(null);
+    try {
+      const list = await fetchServerAssessments();
+      setServerAssessments(list);
+    } catch (err) {
+      setServerError(err instanceof Error ? err.message : 'Failed to connect to server');
+    } finally {
+      setServerLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (filter === 'server' && online) {
+      loadServerAssessments();
+    }
+  }, [filter, online, loadServerAssessments]);
+
+  // Check if a server assessment exists locally
+  const localIds = new Set(assessments?.map((a) => a.id) || []);
+
+  const handlePull = useCallback(
+    async (id: string) => {
+      // If assessment exists locally, confirm overwrite
+      if (localIds.has(id) && overwriteTarget !== id) {
+        setOverwriteTarget(id);
+        return;
+      }
+
+      setOverwriteTarget(null);
+      setPullingId(id);
+      setPullProgress(null);
+
+      try {
+        await pullAssessment(id, (progress) => setPullProgress(progress));
+      } catch (err) {
+        console.error('Pull failed:', err);
+        setServerError(err instanceof Error ? err.message : 'Download failed');
+      } finally {
+        setPullingId(null);
+        setPullProgress(null);
+      }
+    },
+    [localIds, overwriteTarget],
+  );
 
   const statusBadge = (status: AssessmentStatus) => {
     if (status === 'synced') {
@@ -164,31 +227,38 @@ export default function Home() {
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
         {/* Filter Tabs */}
-        {assessments.length > 0 && (
-          <div className="flex gap-1 mb-6 bg-white rounded-xl p-1 border border-navy/10 shadow-sm">
-            {(
-              [
-                { key: 'all', label: 'All' },
-                { key: 'in_progress', label: 'In Progress' },
-                { key: 'completed', label: 'Completed' },
-              ] as const
-            ).map((tab) => {
-              const count =
-                tab.key === 'all'
-                  ? assessments.length
+        <div className="flex gap-1 mb-6 bg-white rounded-xl p-1 border border-navy/10 shadow-sm">
+          {(
+            [
+              { key: 'all', label: 'All' },
+              { key: 'in_progress', label: 'In Progress' },
+              { key: 'completed', label: 'Completed' },
+              { key: 'server', label: 'Server' },
+            ] as const
+          ).map((tab) => {
+            const count =
+              tab.key === 'all'
+                ? assessments.length
+                : tab.key === 'server'
+                  ? serverAssessments.length
                   : assessments.filter((a) => a.status === tab.key).length;
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => setFilter(tab.key)}
-                  className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                    filter === tab.key
+            const isServerDisabled = tab.key === 'server' && !online;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => !isServerDisabled && setFilter(tab.key)}
+                disabled={isServerDisabled}
+                className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                  isServerDisabled
+                    ? 'text-navy/20 cursor-not-allowed'
+                    : filter === tab.key
                       ? 'bg-navy text-white shadow-sm'
                       : 'text-navy/60 hover:text-navy hover:bg-blue-pale'
-                  }`}
-                >
-                  {tab.label}
+                }`}
+              >
+                {tab.label}
+                {!isServerDisabled && (
                   <span
                     className={`ml-1.5 text-xs ${
                       filter === tab.key ? 'text-white/60' : 'text-navy/30'
@@ -196,14 +266,69 @@ export default function Home() {
                   >
                     {count}
                   </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
+                )}
+              </button>
+            );
+          })}
+        </div>
 
-        {/* Assessment Cards */}
-        {filtered && filtered.length > 0 ? (
+        {/* Server tab content */}
+        {filter === 'server' ? (
+          <div>
+            {serverLoading ? (
+              <div className="text-center py-16">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-8 h-8 border-3 border-navy/20 border-t-navy rounded-full animate-spin" />
+                  <p className="text-navy/50 text-sm">Loading server assessments...</p>
+                </div>
+              </div>
+            ) : serverError ? (
+              <div className="text-center py-16">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-50 flex items-center justify-center">
+                  <svg className="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-navy/60 mb-1">Connection Error</h3>
+                <p className="text-sm text-navy/40 mb-4">{serverError}</p>
+                <button
+                  type="button"
+                  onClick={loadServerAssessments}
+                  className="text-sm font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-lg transition-colors"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : serverAssessments.length === 0 ? (
+              <div className="text-center py-16">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-navy/5 flex items-center justify-center">
+                  <svg className="w-8 h-8 text-navy/20" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-navy/60 mb-1">No assessments on server</h3>
+                <p className="text-sm text-navy/40">Sync an assessment to see it here</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {serverAssessments.map((sa) => (
+                  <ServerAssessmentCard
+                    key={sa.id}
+                    assessment={sa}
+                    isLocal={localIds.has(sa.id)}
+                    pulling={pullingId === sa.id}
+                    pullProgress={pullingId === sa.id ? pullProgress : null}
+                    disabled={pullingId !== null && pullingId !== sa.id}
+                    onPull={handlePull}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        ) :
+
+        /* Assessment Cards (local tabs) */
+        filtered && filtered.length > 0 ? (
           <div className="space-y-3">
             {filtered.map((assessment) => {
               const counts = itemCounts?.get(assessment.id);
@@ -403,6 +528,17 @@ export default function Home() {
         variant="danger"
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      {/* Overwrite Confirmation Dialog */}
+      <ConfirmDialog
+        open={overwriteTarget !== null}
+        title="Update Local Copy"
+        message="This assessment already exists on this device. Downloading will replace the local version with the server copy. Continue?"
+        confirmLabel="Replace"
+        variant="default"
+        onConfirm={() => overwriteTarget && handlePull(overwriteTarget)}
+        onCancel={() => setOverwriteTarget(null)}
       />
     </div>
   );

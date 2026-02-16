@@ -1,3 +1,4 @@
+import { v4 as uuidv4 } from 'uuid';
 import type { Recommendation, Priority, RecommendationType } from '../types';
 
 interface RecommendationEditorProps {
@@ -41,7 +42,7 @@ export default function RecommendationEditor({
   function handleAdd() {
     if (atMax) return;
     const newItem: Recommendation = {
-      id: crypto.randomUUID(),
+      id: uuidv4(),
       assessment_id: assessmentId,
       order: items.length + 1,
       description: '',

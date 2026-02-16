@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Configuration
 REMOTE_USER="${REMOTE_USER:-cpted}"
-REMOTE_IP="${REMOTE_IP:-10.21.1.138}"
+REMOTE_IP="${REMOTE_IP:-100.91.180.116}"
 REMOTE_HOST="${REMOTE_USER}@${REMOTE_IP}"
 REMOTE_DIR="${REMOTE_DIR:-/home/cpted/cpted-app}"
 

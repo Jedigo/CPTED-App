@@ -1,3 +1,4 @@
+import { v4 as uuidv4 } from 'uuid';
 import type { ItemScore, Recommendation } from '../types';
 import { ZONES } from '../data/zones';
 
@@ -77,7 +78,7 @@ export function generateRecommendations(
     });
 
   return candidates.slice(0, count).map((c, idx) => ({
-    id: crypto.randomUUID(),
+    id: uuidv4(),
     assessment_id: assessmentId,
     order: idx + 1,
     description: `${c.zoneName} — ${c.principleName}: ${c.item.item_text}`,
@@ -134,7 +135,7 @@ export function generateQuickWins(
   });
 
   return combined.slice(0, count).map((c, idx) => ({
-    id: crypto.randomUUID(),
+    id: uuidv4(),
     assessment_id: assessmentId,
     order: idx + 1,
     description: `${c.zoneName} — ${c.principleName}: ${c.item.item_text}`,

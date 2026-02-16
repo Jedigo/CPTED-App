@@ -108,13 +108,21 @@ export default function Summary() {
     [recommendations, persistRecs],
   );
 
+  const [recsError, setRecsError] = useState<string | null>(null);
+
   const handleAutoGenerate = useCallback(() => {
     if (!id || !itemScores) return;
-    const recs = generateRecommendations(itemScores, id, 5);
-    const qw = generateQuickWins(itemScores, id, 5);
-    setRecommendations(recs);
-    setQuickWins(qw);
-    persistRecs(recs, qw);
+    try {
+      setRecsError(null);
+      const recs = generateRecommendations(itemScores, id, 5);
+      const qw = generateQuickWins(itemScores, id, 5);
+      setRecommendations(recs);
+      setQuickWins(qw);
+      persistRecs(recs, qw);
+    } catch (err) {
+      console.error('Auto-generate recommendations failed:', err);
+      setRecsError(err instanceof Error ? err.message : 'Failed to generate recommendations');
+    }
   }, [id, itemScores, persistRecs]);
 
   const [generating, setGenerating] = useState(false);
@@ -344,24 +352,31 @@ export default function Summary() {
 
         {/* Auto-generate button */}
         {itemScores && itemScores.some((s) => s.score !== null) && (
-          <div className="bg-blue-light/50 rounded-xl border border-blue-medium/20 p-4 flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold text-navy">
-                Auto-Generate Recommendations
-              </p>
-              <p className="text-xs text-navy/50 mt-0.5">
-                Analyzes scores to pick the top issues and quick wins. You can edit them after.
-              </p>
+          <div className="space-y-2">
+            <div className="bg-blue-light/50 rounded-xl border border-blue-medium/20 p-4 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-navy">
+                  Auto-Generate Recommendations
+                </p>
+                <p className="text-xs text-navy/50 mt-0.5">
+                  Analyzes scores to pick the top issues and quick wins. You can edit them after.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleAutoGenerate}
+                className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-blue-medium text-white hover:bg-blue-medium/80 active:scale-95 transition-all flex-shrink-0"
+              >
+                {recommendations.length > 0 || quickWins.length > 0
+                  ? 'Regenerate'
+                  : 'Generate'}
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={handleAutoGenerate}
-              className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-blue-medium text-white hover:bg-blue-medium/80 active:scale-95 transition-all flex-shrink-0"
-            >
-              {recommendations.length > 0 || quickWins.length > 0
-                ? 'Regenerate'
-                : 'Generate'}
-            </button>
+            {recsError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+                {recsError}
+              </div>
+            )}
           </div>
         )}
 
