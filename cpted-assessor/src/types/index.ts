@@ -27,6 +27,7 @@ export interface Assessment {
   top_recommendations: Recommendation[]
   quick_wins: Recommendation[]
   notes: string
+  assessor_signature: string | null
   synced_at: string | null
 }
 

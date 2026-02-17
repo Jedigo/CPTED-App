@@ -203,6 +203,7 @@ export async function pullAssessment(
       top_recommendations: assessmentData.top_recommendations || [],
       quick_wins: assessmentData.quick_wins || [],
       notes: assessmentData.notes || '',
+      assessor_signature: assessmentData.assessor_signature || null,
     };
     await db.assessments.put(assessment);
 

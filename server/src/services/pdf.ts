@@ -783,61 +783,25 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
         try {
           doc.addImage(b64, 'JPEG', x, y, photoWidth, photoWidth * 0.75);
 
-          // Caption: context-aware based on item score
+          // Brief caption: score label + short item description
           doc.setFontSize(6);
+          doc.setFont('helvetica', 'normal');
           doc.setTextColor(100);
-          const captionParts: string[] = [];
 
           if (photo.item_score_id) {
             const itemScore = data.itemScores.find(
               (is) => is.id === photo.item_score_id,
             );
-            if (itemScore && itemScore.score !== null && !itemScore.is_na) {
-              const score = itemScore.score;
-              const guidance = ITEM_GUIDANCE.get(itemScore.item_text);
-              let caption: string;
-
-              if (score <= 2 && guidance) {
-                // Deficient — describe the issue using the CPTED standard
-                caption = `${getScoreLabel(score)}: ${guidance.standard}`;
-              } else if (score >= 4) {
-                // Good/Excellent — describe what was done right
-                caption = `${getScoreLabel(score)}: ${itemScore.item_text}`;
-              } else if (itemScore.notes.trim()) {
-                // Score 3 — show assessor notes
-                caption = itemScore.notes.trim();
-              } else {
-                caption = itemScore.item_text;
-              }
-
-              captionParts.push(
-                caption.length > 120 ? caption.substring(0, 117) + '...' : caption,
-              );
-            } else if (itemScore) {
-              captionParts.push(itemScore.item_text);
+            if (itemScore) {
+              const label = itemScore.score !== null && !itemScore.is_na
+                ? `${getScoreLabel(itemScore.score)} \u2014 `
+                : '';
+              const brief = itemScore.item_text.length > 70
+                ? itemScore.item_text.substring(0, 67) + '...'
+                : itemScore.item_text;
+              const captionLines = doc.splitTextToSize(label + brief, photoWidth);
+              doc.text(captionLines, x, y + photoWidth * 0.75 + 3);
             }
-          }
-
-          if (photo.captured_at) {
-            const capturedDate =
-              photo.captured_at instanceof Date
-                ? photo.captured_at
-                : new Date(photo.captured_at);
-            captionParts.push(
-              capturedDate.toLocaleString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                hour: 'numeric',
-                minute: '2-digit',
-              }),
-            );
-          }
-
-          if (captionParts.length > 0) {
-            doc.setFont('helvetica', 'normal');
-            const captionText = captionParts.join(' \u2014 ');
-            const captionLines = doc.splitTextToSize(captionText, photoWidth);
-            doc.text(captionLines, x, y + photoWidth * 0.75 + 3);
           }
         } catch {
           // Skip photos that fail to render
@@ -1007,44 +971,48 @@ function renderLiabilityWaiver(doc: jsPDF, data: PDFData): void {
   doc.text(waiverLines, PAGE_MARGIN, y);
   y += waiverLines.length * 5 + 20;
 
+  // Assessor signature section
   const lineWidth = 70;
-  const sigY = y;
   const leftSig = PAGE_MARGIN;
   const rightSig = PAGE_WIDTH / 2 + 10;
 
   doc.setDrawColor(NAVY);
   doc.setLineWidth(0.3);
 
-  doc.line(leftSig, sigY, leftSig + lineWidth, sigY);
+  // Render signature image above the line
+  const sig = (data.assessment as Record<string, unknown>).assessor_signature as string | null;
+  if (sig) {
+    try {
+      doc.addImage(sig, 'PNG', leftSig, y - 18, 55, 15);
+    } catch {
+      // Skip if signature image fails
+    }
+  }
+
+  // Date value above the line
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(50);
+  doc.text(formatDate(data.assessment.date_of_assessment), rightSig, y - 3);
+
+  // Signature and date lines
+  doc.line(leftSig, y, leftSig + lineWidth, y);
+  doc.line(rightSig, y, rightSig + lineWidth, y);
+
+  // Labels below the lines
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(NAVY);
-  doc.text('Assessor Signature', leftSig, sigY + 5);
+  doc.text('Assessor Signature', leftSig, y + 5);
+  doc.text('Date', rightSig, y + 5);
+
+  // Assessor info below label
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(100);
-  doc.text(data.assessment.assessor_name, leftSig, sigY + 10);
-
-  doc.line(rightSig, sigY, rightSig + lineWidth, sigY);
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(NAVY);
-  doc.text('Date', rightSig, sigY + 5);
-
-  const ownerSigY = sigY + 25;
-  doc.line(leftSig, ownerSigY, leftSig + lineWidth, ownerSigY);
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(NAVY);
-  doc.text('Homeowner Signature', leftSig, ownerSigY + 5);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100);
-  doc.text(data.assessment.homeowner_name, leftSig, ownerSigY + 10);
-
-  doc.line(rightSig, ownerSigY, rightSig + lineWidth, ownerSigY);
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(NAVY);
-  doc.text('Date', rightSig, ownerSigY + 5);
+  doc.text(data.assessment.assessor_name, leftSig, y + 10);
+  if (data.assessment.assessor_badge_id) {
+    doc.text(`Badge: ${data.assessment.assessor_badge_id}`, leftSig, y + 14);
+  }
 
   addPageFooter(doc, pageNum);
 }

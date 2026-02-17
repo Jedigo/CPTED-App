@@ -86,6 +86,7 @@ export default function NewAssessment() {
         top_recommendations: [],
         quick_wins: [],
         notes: '',
+        assessor_signature: null,
         synced_at: null,
       }
 

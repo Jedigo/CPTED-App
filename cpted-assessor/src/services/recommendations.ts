@@ -115,12 +115,7 @@ export function generateFenceRecommendation(
   const hasScore1 = triggerItems.some((item) => item.score === 1);
   const priority: 'high' | 'medium' = hasScore1 ? 'high' : 'medium';
 
-  // Check item notes for HOA mention
-  const hasHOA = rearYardItems.some(
-    (item) => item.notes && /hoa/i.test(item.notes),
-  );
-
-  const description = FENCE_RECOMMENDATION_TEXT + (hasHOA ? HOA_ADDENDUM : '');
+  const description = FENCE_RECOMMENDATION_TEXT + HOA_ADDENDUM;
 
   return {
     id: uuidv4(),

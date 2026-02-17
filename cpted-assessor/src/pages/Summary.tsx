@@ -16,6 +16,7 @@ import { syncAssessment, checkServerHealth } from '../services/sync';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import HeaderBackButton from '../components/HeaderBackButton';
 import RecommendationEditor from '../components/RecommendationEditor';
+import SignaturePad from '../components/SignaturePad';
 import type { Recommendation } from '../types';
 
 const LIABILITY_WAIVER = `This CPTED assessment is provided solely for informational and preventative purposes. The observations and recommendations included in this report are offered as voluntary guidance and do not constitute mandated safety requirements, building code standards, or legal directives. The implementation of any recommendations is entirely at the discretion of the property owner and should be undertaken only with appropriate professional consultation when necessary. The Volusia Sheriff's Office, its employees, agents, and representatives make no warranties, guarantees, or assurances regarding the effectiveness of any recommended security measures. Crime prevention strategies reduce risk but cannot completely eliminate the possibility of criminal activity. By accepting this report, the property owner acknowledges that the Volusia Sheriff's Office shall not be held liable for any actions taken or not taken based on the information provided, nor for any damages, losses, or incidents that may occur on or near the property following this assessment.`;
@@ -422,14 +423,33 @@ export default function Summary() {
           )}
         </div>
 
-        {/* Liability Waiver */}
+        {/* Liability Waiver + Assessor Signature */}
         <div className="bg-white rounded-xl border-2 border-navy/20 shadow-sm p-6">
           <h2 className="text-sm font-bold text-navy/60 uppercase tracking-wide mb-3">
             Liability Waiver
           </h2>
-          <p className="text-sm text-navy/70 leading-relaxed whitespace-pre-line">
+          <p className="text-sm text-navy/70 leading-relaxed whitespace-pre-line mb-6">
             {LIABILITY_WAIVER}
           </p>
+
+          <div className="border-t border-navy/10 pt-4">
+            <h3 className="text-sm font-bold text-navy/60 mb-1">
+              Assessor Signature
+            </h3>
+            <p className="text-xs text-navy/40 mb-3">
+              {assessment.assessor_name} &mdash; {assessment.assessor_badge_id || 'No badge ID'}
+            </p>
+            <SignaturePad
+              value={assessment.assessor_signature}
+              onChange={(sig) => {
+                if (!id) return;
+                db.assessments.update(id, {
+                  assessor_signature: sig,
+                  updated_at: new Date().toISOString(),
+                });
+              }}
+            />
+          </div>
         </div>
 
         {/* Action Buttons */}
