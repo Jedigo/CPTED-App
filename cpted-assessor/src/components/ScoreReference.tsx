@@ -37,8 +37,8 @@ export default function ScoreReference({ open, onClose }: ScoreReferenceProps) {
       />
 
       {/* Card */}
-      <div className="fixed z-40 top-[56px] right-4 bg-white rounded-xl shadow-xl border border-navy/10 p-4 w-72">
-        <h3 className="text-sm font-bold text-navy mb-3">Score Reference</h3>
+      <div className="fixed z-40 top-[56px] right-4 bg-surface rounded-xl shadow-xl border border-ink/10 p-4 w-72">
+        <h3 className="text-sm font-bold text-ink mb-3">Score Reference</h3>
         <div className="space-y-2">
           {SCORES.map((s) => (
             <div key={s.score} className="flex items-start gap-2.5">
@@ -46,8 +46,8 @@ export default function ScoreReference({ open, onClose }: ScoreReferenceProps) {
                 {s.score === 'N/A' ? '' : s.score}
               </span>
               <div className="min-w-0">
-                <span className="text-sm font-semibold text-navy">{s.label}</span>
-                <p className="text-xs text-navy/60 leading-tight">{s.description}</p>
+                <span className="text-sm font-semibold text-ink">{s.label}</span>
+                <p className="text-xs text-ink/60 leading-tight">{s.description}</p>
               </div>
             </div>
           ))}

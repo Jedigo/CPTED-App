@@ -22,8 +22,8 @@ export default function ZoneView({
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-xl font-bold text-navy">{zone.name}</h2>
-        <p className="text-sm text-navy/60 mt-1 leading-relaxed">
+        <h2 className="text-xl font-bold text-ink">{zone.name}</h2>
+        <p className="text-sm text-ink/60 mt-1 leading-relaxed">
           {zone.description}
         </p>
       </div>

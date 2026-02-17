@@ -21,7 +21,7 @@ export default function PhotoThumbnail({ photoId, onDelete, onClick }: PhotoThum
 
   if (!photo || !src) {
     return (
-      <div className="w-20 h-20 rounded-lg bg-gray-100 border border-navy/10 animate-pulse flex-shrink-0" />
+      <div className="w-20 h-20 rounded-lg bg-gray-100 border border-ink/10 animate-pulse flex-shrink-0" />
     );
   }
 
@@ -30,7 +30,7 @@ export default function PhotoThumbnail({ photoId, onDelete, onClick }: PhotoThum
       <img
         src={src}
         alt="Captured photo"
-        className={`w-20 h-20 rounded-lg object-cover border border-navy/10${onClick ? ' cursor-pointer' : ''}`}
+        className={`w-20 h-20 rounded-lg object-cover border border-ink/10${onClick ? ' cursor-pointer' : ''}`}
         onClick={onClick}
         role={onClick ? 'button' : undefined}
         aria-label={onClick ? 'View photo' : undefined}

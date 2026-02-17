@@ -27,7 +27,7 @@ const PRIORITY_OPTIONS: { value: Priority; label: string; colors: string }[] = [
   },
 ];
 
-const UNSELECTED = 'bg-white text-navy/50 border-navy/20 hover:border-navy/40';
+const UNSELECTED = 'bg-surface text-ink/50 border-ink/20 hover:border-ink/40';
 
 export default function RecommendationEditor({
   items,
@@ -77,7 +77,7 @@ export default function RecommendationEditor({
   return (
     <div className="space-y-3">
       {items.length === 0 && (
-        <p className="text-navy/40 text-sm italic py-2">
+        <p className="text-ink/40 text-sm italic py-2">
           No {label.toLowerCase()}s yet. Tap &ldquo;+ Add&rdquo; to begin.
         </p>
       )}
@@ -85,7 +85,7 @@ export default function RecommendationEditor({
       {items.map((item, index) => (
         <div
           key={item.id}
-          className="bg-white rounded-lg border border-navy/10 p-4 space-y-3"
+          className="bg-surface rounded-lg border border-ink/10 p-4 space-y-3"
         >
           {/* Header row: number badge + move/delete */}
           <div className="flex items-center justify-between">
@@ -97,7 +97,7 @@ export default function RecommendationEditor({
                 type="button"
                 onClick={() => handleMove(index, -1)}
                 disabled={index === 0}
-                className="w-11 h-11 flex items-center justify-center rounded-lg text-navy/40 hover:text-navy hover:bg-navy/5 disabled:opacity-25 disabled:cursor-not-allowed transition-colors"
+                className="w-11 h-11 flex items-center justify-center rounded-lg text-ink/40 hover:text-ink hover:bg-ink/5 disabled:opacity-25 disabled:cursor-not-allowed transition-colors"
                 aria-label="Move up"
               >
                 &#x25B2;
@@ -106,7 +106,7 @@ export default function RecommendationEditor({
                 type="button"
                 onClick={() => handleMove(index, 1)}
                 disabled={index === items.length - 1}
-                className="w-11 h-11 flex items-center justify-center rounded-lg text-navy/40 hover:text-navy hover:bg-navy/5 disabled:opacity-25 disabled:cursor-not-allowed transition-colors"
+                className="w-11 h-11 flex items-center justify-center rounded-lg text-ink/40 hover:text-ink hover:bg-ink/5 disabled:opacity-25 disabled:cursor-not-allowed transition-colors"
                 aria-label="Move down"
               >
                 &#x25BC;
@@ -134,12 +134,12 @@ export default function RecommendationEditor({
                 : 'Describe the quick win...'
             }
             rows={2}
-            className="w-full rounded-lg border border-navy/20 px-3 py-2 text-sm bg-white outline-none focus:border-blue-medium focus:ring-2 focus:ring-blue-medium/30 resize-y"
+            className="w-full rounded-lg border border-ink/20 px-3 py-2 text-sm bg-surface outline-none focus:border-blue-medium focus:ring-2 focus:ring-blue-medium/30 resize-y"
           />
 
           {/* Priority + Timeline row */}
           <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-xs font-bold text-navy/50 uppercase tracking-wide">
+            <span className="text-xs font-bold text-ink/50 uppercase tracking-wide">
               Priority
             </span>
             <div className="flex gap-1">
@@ -167,8 +167,8 @@ export default function RecommendationEditor({
         disabled={atMax}
         className={`w-full py-3 rounded-lg border-2 border-dashed text-sm font-semibold transition-colors ${
           atMax
-            ? 'border-navy/10 text-navy/25 cursor-not-allowed'
-            : 'border-navy/20 text-navy/50 hover:border-blue-medium hover:text-blue-medium'
+            ? 'border-ink/10 text-ink/25 cursor-not-allowed'
+            : 'border-ink/20 text-ink/50 hover:border-blue-medium hover:text-blue-medium'
         }`}
       >
         + Add {label}

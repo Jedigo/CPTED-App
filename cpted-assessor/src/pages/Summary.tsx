@@ -17,6 +17,7 @@ import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import HeaderBackButton from '../components/HeaderBackButton';
 import RecommendationEditor from '../components/RecommendationEditor';
 import SignaturePad from '../components/SignaturePad';
+import ThemeToggle from '../components/ThemeToggle';
 import type { Recommendation } from '../types';
 
 const LIABILITY_WAIVER = `This CPTED assessment is provided solely for informational and preventative purposes. The observations and recommendations included in this report are offered as voluntary guidance and do not constitute mandated safety requirements, building code standards, or legal directives. The implementation of any recommendations is entirely at the discretion of the property owner and should be undertaken only with appropriate professional consultation when necessary. The Volusia Sheriff's Office, its employees, agents, and representatives make no warranties, guarantees, or assurances regarding the effectiveness of any recommended security measures. Crime prevention strategies reduce risk but cannot completely eliminate the possibility of criminal activity. By accepting this report, the property owner acknowledges that the Volusia Sheriff's Office shall not be held liable for any actions taken or not taken based on the information provided, nor for any damages, losses, or incidents that may occur on or near the property following this assessment.`;
@@ -196,7 +197,7 @@ export default function Summary() {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-blue-pale gap-3">
         <div className="loading-spinner" />
-        <p className="text-navy/50 text-sm">Loading summary...</p>
+        <p className="text-ink/50 text-sm">Loading summary...</p>
       </div>
     );
   }
@@ -204,7 +205,7 @@ export default function Summary() {
   if (!assessment) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-blue-pale gap-4">
-        <p className="text-navy/50 text-lg">Assessment not found</p>
+        <p className="text-ink/50 text-lg">Assessment not found</p>
         <Link
           to="/"
           className="text-blue-medium hover:underline font-medium"
@@ -251,6 +252,7 @@ export default function Summary() {
           </h1>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
+          <ThemeToggle />
           <span
             className={`w-2 h-2 rounded-full ${online ? 'bg-green-400' : 'bg-red-400'}`}
             aria-label={online ? 'Online' : 'Offline'}
@@ -269,8 +271,8 @@ export default function Summary() {
 
       <div className="max-w-4xl mx-auto px-6 py-8 space-y-8">
         {/* Overall Score Card */}
-        <div className="bg-white rounded-xl border border-navy/10 shadow-sm p-8 text-center">
-          <h2 className="text-sm font-bold text-navy/60 uppercase tracking-wide mb-2">
+        <div className="bg-surface rounded-xl border border-ink/10 shadow-sm p-8 text-center">
+          <h2 className="text-sm font-bold text-ink/60 uppercase tracking-wide mb-2">
             Overall Score
           </h2>
           {overall !== null ? (
@@ -278,7 +280,7 @@ export default function Summary() {
               <p className={`text-5xl font-bold ${getScoreColor(overall)}`}>
                 {overall.toFixed(1)}
               </p>
-              <p className="text-sm text-navy/40 mt-1">/ 5.0</p>
+              <p className="text-sm text-ink/40 mt-1">/ 5.0</p>
               <span
                 className={`inline-block mt-3 px-4 py-1.5 rounded-full text-sm font-semibold ${getScoreBgColor(overall)} ${getScoreColor(overall)}`}
               >
@@ -287,22 +289,22 @@ export default function Summary() {
             </>
           ) : (
             <>
-              <p className="text-5xl font-bold text-navy/20">&mdash;</p>
-              <p className="text-sm text-navy/40 mt-1">No scores yet</p>
+              <p className="text-5xl font-bold text-ink/20">&mdash;</p>
+              <p className="text-sm text-ink/40 mt-1">No scores yet</p>
             </>
           )}
         </div>
 
         {/* Zone Scores Table */}
-        <div className="bg-white rounded-xl border border-navy/10 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-navy/10">
-            <h2 className="text-sm font-bold text-navy/60 uppercase tracking-wide">
+        <div className="bg-surface rounded-xl border border-ink/10 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-ink/10">
+            <h2 className="text-sm font-bold text-ink/60 uppercase tracking-wide">
               Zone Scores
             </h2>
           </div>
           <table className="w-full">
             <thead>
-              <tr className="text-left text-xs font-bold text-navy/50 uppercase tracking-wide">
+              <tr className="text-left text-xs font-bold text-ink/50 uppercase tracking-wide">
                 <th className="px-6 py-3">#</th>
                 <th className="px-6 py-3">Zone</th>
                 <th className="px-6 py-3 text-center">Avg Score</th>
@@ -322,10 +324,10 @@ export default function Summary() {
                         : ''
                     }
                   >
-                    <td className="px-6 py-3 text-sm text-navy/50 font-mono">
+                    <td className="px-6 py-3 text-sm text-ink/50 font-mono">
                       {zs.zone_order}
                     </td>
-                    <td className="px-6 py-3 text-sm font-medium text-navy">
+                    <td className="px-6 py-3 text-sm font-medium text-ink">
                       {zs.zone_name}
                     </td>
                     <td className="px-6 py-3 text-center">
@@ -336,10 +338,10 @@ export default function Summary() {
                           {zs.average_score.toFixed(1)}
                         </span>
                       ) : (
-                        <span className="text-sm text-navy/25">&mdash;</span>
+                        <span className="text-sm text-ink/25">&mdash;</span>
                       )}
                     </td>
-                    <td className="px-6 py-3 text-center text-sm text-navy/60">
+                    <td className="px-6 py-3 text-center text-sm text-ink/60">
                       {counts
                         ? `${counts.scored} / ${counts.total}`
                         : '—'}
@@ -351,7 +353,7 @@ export default function Summary() {
                             ? 'bg-green-400'
                             : counts && counts.scored > 0
                               ? 'bg-yellow-400'
-                              : 'bg-navy/15'
+                              : 'bg-ink/15'
                         }`}
                       />
                     </td>
@@ -367,10 +369,10 @@ export default function Summary() {
           <div className="space-y-2">
             <div className="bg-blue-light/50 rounded-xl border border-blue-medium/20 p-4 flex items-center justify-between gap-4">
               <div>
-                <p className="text-sm font-semibold text-navy">
+                <p className="text-sm font-semibold text-ink">
                   Auto-Generate Recommendations
                 </p>
-                <p className="text-xs text-navy/50 mt-0.5">
+                <p className="text-xs text-ink/50 mt-0.5">
                   Analyzes scores to pick the top issues and quick wins. You can edit them after.
                 </p>
               </div>
@@ -393,8 +395,8 @@ export default function Summary() {
         )}
 
         {/* Top Recommendations */}
-        <div className="bg-white rounded-xl border border-navy/10 shadow-sm p-6">
-          <h2 className="text-sm font-bold text-navy/60 uppercase tracking-wide mb-3">
+        <div className="bg-surface rounded-xl border border-ink/10 shadow-sm p-6">
+          <h2 className="text-sm font-bold text-ink/60 uppercase tracking-wide mb-3">
             Top Recommendations
           </h2>
           {id && (
@@ -409,8 +411,8 @@ export default function Summary() {
         </div>
 
         {/* Quick Wins */}
-        <div className="bg-white rounded-xl border border-navy/10 shadow-sm p-6">
-          <h2 className="text-sm font-bold text-navy/60 uppercase tracking-wide mb-3">
+        <div className="bg-surface rounded-xl border border-ink/10 shadow-sm p-6">
+          <h2 className="text-sm font-bold text-ink/60 uppercase tracking-wide mb-3">
             Quick Wins
           </h2>
           {id && (
@@ -424,19 +426,19 @@ export default function Summary() {
         </div>
 
         {/* Liability Waiver + Assessor Signature */}
-        <div className="bg-white rounded-xl border-2 border-navy/20 shadow-sm p-6">
-          <h2 className="text-sm font-bold text-navy/60 uppercase tracking-wide mb-3">
+        <div className="bg-surface rounded-xl border-2 border-ink/20 shadow-sm p-6">
+          <h2 className="text-sm font-bold text-ink/60 uppercase tracking-wide mb-3">
             Liability Waiver
           </h2>
-          <p className="text-sm text-navy/70 leading-relaxed whitespace-pre-line mb-6">
+          <p className="text-sm text-ink/70 leading-relaxed whitespace-pre-line mb-6">
             {LIABILITY_WAIVER}
           </p>
 
-          <div className="border-t border-navy/10 pt-4">
-            <h3 className="text-sm font-bold text-navy/60 mb-1">
+          <div className="border-t border-ink/10 pt-4">
+            <h3 className="text-sm font-bold text-ink/60 mb-1">
               Assessor Signature
             </h3>
-            <p className="text-xs text-navy/40 mb-3">
+            <p className="text-xs text-ink/40 mb-3">
               {assessment.assessor_name} &mdash; {assessment.assessor_badge_id || 'No badge ID'}
             </p>
             <SignaturePad
@@ -475,7 +477,7 @@ export default function Summary() {
             onClick={handleGeneratePDF}
             className={`flex-1 px-6 py-4 rounded-xl font-semibold text-sm transition-colors ${
               overall === null
-                ? 'bg-navy/20 text-navy/40 cursor-not-allowed'
+                ? 'bg-ink/20 text-ink/40 cursor-not-allowed'
                 : generating
                   ? 'bg-blue-medium text-white/80 cursor-wait'
                   : 'bg-navy text-white hover:bg-navy/90'
@@ -508,10 +510,10 @@ export default function Summary() {
 
         {/* Sync to Server */}
         {serverReachable && (
-          <div className="bg-white rounded-xl border border-navy/10 shadow-sm p-4 flex items-center justify-between gap-4 -mt-4 mb-8">
+          <div className="bg-surface rounded-xl border border-ink/10 shadow-sm p-4 flex items-center justify-between gap-4 -mt-4 mb-8">
             <div>
-              <p className="text-sm font-semibold text-navy">Sync to Server</p>
-              <p className="text-xs text-navy/50 mt-0.5">
+              <p className="text-sm font-semibold text-ink">Sync to Server</p>
+              <p className="text-xs text-ink/50 mt-0.5">
                 {assessment.synced_at
                   ? `Last synced: ${new Date(assessment.synced_at).toLocaleString()}`
                   : 'Not yet synced to server'}
@@ -525,7 +527,7 @@ export default function Summary() {
                 syncing
                   ? 'bg-blue-medium/60 text-white cursor-wait'
                   : overall === null
-                    ? 'bg-navy/20 text-navy/40 cursor-not-allowed'
+                    ? 'bg-ink/20 text-ink/40 cursor-not-allowed'
                     : 'bg-blue-medium text-white hover:bg-blue-medium/80 active:scale-95'
               }`}
             >

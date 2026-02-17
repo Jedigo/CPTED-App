@@ -30,10 +30,10 @@ export default function PrincipleSection({
         className="w-full flex items-center justify-between px-4 py-3 bg-blue-light/50 rounded-lg hover:bg-blue-light transition-colors"
       >
         <div className="flex items-center gap-2">
-          <span className="text-navy/50 text-xs w-4">
+          <span className="text-ink/50 text-xs w-4">
             {expanded ? '▼' : '▶'}
           </span>
-          <span className="text-navy font-semibold text-sm">
+          <span className="text-ink font-semibold text-sm">
             {principle.name}
           </span>
         </div>
@@ -41,7 +41,7 @@ export default function PrincipleSection({
           className={`text-xs font-medium ${
             addressed === total && total > 0
               ? 'text-score-good'
-              : 'text-navy/50'
+              : 'text-ink/50'
           }`}
         >
           {addressed}/{total} scored

@@ -11,6 +11,7 @@ import ZoneSidebar from '../components/ZoneSidebar';
 import ZoneView from '../components/ZoneView';
 import HeaderBackButton from '../components/HeaderBackButton';
 import ScoreReference from '../components/ScoreReference';
+import ThemeToggle from '../components/ThemeToggle';
 
 export default function Assessment() {
   const { id } = useParams<{ id: string }>();
@@ -156,7 +157,7 @@ export default function Assessment() {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-blue-pale gap-3">
         <div className="loading-spinner" />
-        <p className="text-navy/50 text-sm">Loading assessment...</p>
+        <p className="text-ink/50 text-sm">Loading assessment...</p>
       </div>
     );
   }
@@ -165,7 +166,7 @@ export default function Assessment() {
   if (!assessment) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-blue-pale gap-4">
-        <p className="text-navy/50 text-lg">Assessment not found</p>
+        <p className="text-ink/50 text-lg">Assessment not found</p>
         <Link
           to="/"
           className="text-blue-medium hover:underline font-medium"
@@ -198,6 +199,7 @@ export default function Assessment() {
           </h1>
         </div>
         <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+          <ThemeToggle />
           {/* Score reference toggle */}
           <button
             type="button"
@@ -264,7 +266,7 @@ export default function Assessment() {
               type="button"
               onClick={goToPrevZone}
               disabled={activeZoneIndex === 0}
-              className="px-6 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 bg-white border border-navy/20 text-navy hover:bg-blue-pale disabled:opacity-30 disabled:cursor-not-allowed"
+              className="px-6 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 bg-surface border border-ink/20 text-ink hover:bg-blue-pale disabled:opacity-30 disabled:cursor-not-allowed"
             >
               &larr; Previous Zone
             </button>

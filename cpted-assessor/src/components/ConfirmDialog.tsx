@@ -62,21 +62,21 @@ export default function ConfirmDialog({
       />
 
       {/* Dialog */}
-      <div className="relative bg-white rounded-2xl shadow-xl max-w-sm w-full p-6">
+      <div className="relative bg-surface rounded-2xl shadow-xl max-w-sm w-full p-6">
         <h3
           id="confirm-title"
-          className="text-lg font-bold text-navy mb-2"
+          className="text-lg font-bold text-ink mb-2"
         >
           {title}
         </h3>
-        <p className="text-sm text-navy/70 mb-6">{message}</p>
+        <p className="text-sm text-ink/70 mb-6">{message}</p>
 
         <div className="flex gap-3">
           <button
             ref={cancelRef}
             type="button"
             onClick={onCancel}
-            className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm border border-navy/20 text-navy hover:bg-blue-pale active:scale-95 transition-all"
+            className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm border border-ink/20 text-ink hover:bg-blue-pale active:scale-95 transition-all"
           >
             {cancelLabel}
           </button>

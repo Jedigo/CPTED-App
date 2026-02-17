@@ -114,7 +114,7 @@ export default function SignaturePad({ value, onChange }: SignaturePadProps) {
   if (value && signed && !drawingRef.current) {
     return (
       <div>
-        <div className="border-2 border-navy/20 rounded-lg bg-white p-2">
+        <div className="border-2 border-ink/20 rounded-lg bg-surface p-2">
           <img src={value} alt="Assessor signature" className="h-20 w-full object-contain" />
         </div>
         <button
@@ -132,10 +132,10 @@ export default function SignaturePad({ value, onChange }: SignaturePadProps) {
     <div>
       <canvas
         ref={canvasRef}
-        className="w-full h-24 border-2 border-dashed border-navy/30 rounded-lg bg-white cursor-crosshair touch-none"
+        className="w-full h-24 border-2 border-dashed border-ink/30 rounded-lg bg-surface cursor-crosshair touch-none"
       />
       <div className="flex items-center justify-between mt-1">
-        <span className="text-xs text-navy/40">Sign above with finger or stylus</span>
+        <span className="text-xs text-ink/40">Sign above with finger or stylus</span>
         {hasStrokesRef.current && (
           <button
             type="button"

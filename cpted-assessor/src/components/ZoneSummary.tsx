@@ -14,30 +14,30 @@ export default function ZoneSummary({ itemScores }: ZoneSummaryProps) {
   const avg = calculateZoneAverage(itemScores);
 
   return (
-    <div className="bg-white rounded-xl border border-navy/10 shadow-sm p-5 mt-6">
-      <h3 className="text-sm font-bold text-navy/70 uppercase tracking-wide mb-3">
+    <div className="bg-surface rounded-xl border border-ink/10 shadow-sm p-5 mt-6">
+      <h3 className="text-sm font-bold text-ink/70 uppercase tracking-wide mb-3">
         Zone Summary
       </h3>
       <div className="flex items-center gap-8">
         <div>
-          <p className="text-xs text-navy/50 mb-0.5">Average Score</p>
+          <p className="text-xs text-ink/50 mb-0.5">Average Score</p>
           <p
-            className={`text-2xl font-bold ${avg !== null ? getScoreColor(avg) : 'text-navy/25'}`}
+            className={`text-2xl font-bold ${avg !== null ? getScoreColor(avg) : 'text-ink/25'}`}
           >
             {avg !== null ? avg.toFixed(1) : '—'}
-            <span className="text-sm font-normal text-navy/40 ml-1">/ 5.0</span>
+            <span className="text-sm font-normal text-ink/40 ml-1">/ 5.0</span>
           </p>
         </div>
         <div>
-          <p className="text-xs text-navy/50 mb-0.5">Addressed</p>
-          <p className="text-xl font-semibold text-navy">
+          <p className="text-xs text-ink/50 mb-0.5">Addressed</p>
+          <p className="text-xl font-semibold text-ink">
             {addressed}
-            <span className="text-sm font-normal text-navy/40 ml-1">/ {total}</span>
+            <span className="text-sm font-normal text-ink/40 ml-1">/ {total}</span>
           </p>
         </div>
         <div>
-          <p className="text-xs text-navy/50 mb-0.5">N/A Items</p>
-          <p className="text-xl font-semibold text-navy/50">{na}</p>
+          <p className="text-xs text-ink/50 mb-0.5">N/A Items</p>
+          <p className="text-xl font-semibold text-ink/50">{na}</p>
         </div>
       </div>
     </div>

@@ -27,7 +27,7 @@ export default function ScoreButtons({ score, isNa, onSelect }: ScoreButtonsProp
             className={`w-11 h-11 rounded-lg font-bold text-base border-2 transition-all active:scale-90 ${
               isActive
                 ? `${bg} text-white ${border}`
-                : `bg-white ${border} ${text} hover:bg-gray-50`
+                : `bg-surface ${border} ${text} hover:bg-gray-50`
             }`}
           >
             {label}
@@ -42,7 +42,7 @@ export default function ScoreButtons({ score, isNa, onSelect }: ScoreButtonsProp
         className={`px-3 h-11 rounded-lg font-bold text-sm border-2 transition-all active:scale-90 ${
           isNa
             ? 'bg-gray-500 text-white border-gray-500'
-            : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+            : 'bg-surface border-gray-300 text-gray-500 hover:bg-gray-50'
         }`}
       >
         N/A

@@ -12,6 +12,7 @@ import {
 } from '../services/sync';
 import ConfirmDialog from '../components/ConfirmDialog';
 import ServerAssessmentCard from '../components/ServerAssessmentCard';
+import ThemeToggle from '../components/ThemeToggle';
 import type { Assessment, AssessmentStatus } from '../types';
 
 type FilterTab = 'all' | 'in_progress' | 'completed' | 'server';
@@ -192,8 +193,8 @@ export default function Home() {
     return (
       <div className="min-h-screen bg-blue-pale flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-3 border-navy/20 border-t-navy rounded-full animate-spin" />
-          <p className="text-navy/50 text-sm">Loading assessments...</p>
+          <div className="w-8 h-8 border-3 border-ink/20 border-t-ink rounded-full animate-spin" />
+          <p className="text-ink/50 text-sm">Loading assessments...</p>
         </div>
       </div>
     );
@@ -217,6 +218,7 @@ export default function Home() {
             />
             <span className="text-xs text-white/50">{online ? 'Online' : 'Offline'}</span>
           </div>
+          <ThemeToggle />
           <Link
             to="/assessment/new"
             className="bg-blue-medium hover:bg-blue-medium/80 active:scale-95 text-white font-semibold text-sm px-5 py-2.5 rounded-xl transition-all"
@@ -228,7 +230,7 @@ export default function Home() {
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
         {/* Filter Tabs */}
-        <div className="flex gap-1 mb-6 bg-white rounded-xl p-1 border border-navy/10 shadow-sm">
+        <div className="flex gap-1 mb-6 bg-surface rounded-xl p-1 border border-ink/10 shadow-sm">
           {(
             [
               { key: 'all', label: 'All' },
@@ -252,17 +254,17 @@ export default function Home() {
                 disabled={isServerDisabled}
                 className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
                   isServerDisabled
-                    ? 'text-navy/20 cursor-not-allowed'
+                    ? 'text-ink/20 cursor-not-allowed'
                     : filter === tab.key
                       ? 'bg-navy text-white shadow-sm'
-                      : 'text-navy/60 hover:text-navy hover:bg-blue-pale'
+                      : 'text-ink/60 hover:text-ink hover:bg-blue-pale'
                 }`}
               >
                 {tab.label}
                 {!isServerDisabled && (
                   <span
                     className={`ml-1.5 text-xs ${
-                      filter === tab.key ? 'text-white/60' : 'text-navy/30'
+                      filter === tab.key ? 'text-white/60' : 'text-ink/30'
                     }`}
                   >
                     {count}
@@ -279,8 +281,8 @@ export default function Home() {
             {serverLoading ? (
               <div className="text-center py-16">
                 <div className="flex flex-col items-center gap-3">
-                  <div className="w-8 h-8 border-3 border-navy/20 border-t-navy rounded-full animate-spin" />
-                  <p className="text-navy/50 text-sm">Loading server assessments...</p>
+                  <div className="w-8 h-8 border-3 border-ink/20 border-t-ink rounded-full animate-spin" />
+                  <p className="text-ink/50 text-sm">Loading server assessments...</p>
                 </div>
               </div>
             ) : serverError ? (
@@ -290,8 +292,8 @@ export default function Home() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <h3 className="text-lg font-semibold text-navy/60 mb-1">Connection Error</h3>
-                <p className="text-sm text-navy/40 mb-4">{serverError}</p>
+                <h3 className="text-lg font-semibold text-ink/60 mb-1">Connection Error</h3>
+                <p className="text-sm text-ink/40 mb-4">{serverError}</p>
                 <button
                   type="button"
                   onClick={loadServerAssessments}
@@ -302,13 +304,13 @@ export default function Home() {
               </div>
             ) : serverAssessments.length === 0 ? (
               <div className="text-center py-16">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-navy/5 flex items-center justify-center">
-                  <svg className="w-8 h-8 text-navy/20" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-ink/5 flex items-center justify-center">
+                  <svg className="w-8 h-8 text-ink/20" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
                   </svg>
                 </div>
-                <h3 className="text-lg font-semibold text-navy/60 mb-1">No assessments on server</h3>
-                <p className="text-sm text-navy/40">Sync an assessment to see it here</p>
+                <h3 className="text-lg font-semibold text-ink/60 mb-1">No assessments on server</h3>
+                <p className="text-sm text-ink/40">Sync an assessment to see it here</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -336,7 +338,7 @@ export default function Home() {
               return (
                 <div
                   key={assessment.id}
-                  className="bg-white rounded-xl border border-navy/10 shadow-sm hover:shadow-md hover:border-navy/20 transition-all group"
+                  className="bg-surface rounded-xl border border-ink/10 shadow-sm hover:shadow-md hover:border-ink/20 transition-all group"
                 >
                   <button
                     type="button"
@@ -347,13 +349,13 @@ export default function Home() {
                     <div className="flex items-start justify-between gap-4">
                       {/* Left: Property info */}
                       <div className="min-w-0 flex-1">
-                        <h3 className="text-base font-bold text-navy truncate group-hover:text-blue-medium transition-colors">
+                        <h3 className="text-base font-bold text-ink truncate group-hover:text-blue-medium transition-colors">
                           {assessment.address}
                         </h3>
-                        <p className="text-sm text-navy/50 mt-0.5">
+                        <p className="text-sm text-ink/50 mt-0.5">
                           {assessment.city}, {assessment.state} {assessment.zip}
                         </p>
-                        <div className="flex items-center gap-3 mt-2 text-sm text-navy/40">
+                        <div className="flex items-center gap-3 mt-2 text-sm text-ink/40">
                           <span>{assessment.homeowner_name}</span>
                           <span>&middot;</span>
                           <span>{formatDate(assessment.created_at)}</span>
@@ -378,7 +380,7 @@ export default function Home() {
                             >
                               {assessment.overall_score.toFixed(1)}
                             </span>
-                            <span className="text-xs text-navy/30 ml-0.5">/5</span>
+                            <span className="text-xs text-ink/30 ml-0.5">/5</span>
                             <p
                               className={`text-xs font-medium ${getScoreColor(assessment.overall_score)}`}
                             >
@@ -386,7 +388,7 @@ export default function Home() {
                             </p>
                           </div>
                         ) : (
-                          <span className="text-sm text-navy/25">No score</span>
+                          <span className="text-sm text-ink/25">No score</span>
                         )}
                       </div>
                     </div>
@@ -399,16 +401,16 @@ export default function Home() {
                       return (
                         <div className="mt-3">
                           <div className="flex items-center justify-between mb-1">
-                            <span className={`text-xs ${readyToComplete ? 'text-green-600 font-semibold' : 'text-navy/40'}`}>
+                            <span className={`text-xs ${readyToComplete ? 'text-green-600 font-semibold' : 'text-ink/40'}`}>
                               {readyToComplete
                                 ? 'All items addressed — ready to complete'
                                 : `${counts.scored} / ${counts.total} items addressed`}
                             </span>
-                            <span className={`text-xs ${readyToComplete ? 'text-green-600' : 'text-navy/30'}`}>
+                            <span className={`text-xs ${readyToComplete ? 'text-green-600' : 'text-ink/30'}`}>
                               {pct}%
                             </span>
                           </div>
-                          <div className="h-1.5 bg-navy/5 rounded-full overflow-hidden">
+                          <div className="h-1.5 bg-ink/5 rounded-full overflow-hidden">
                             <div
                               className={`h-full rounded-full transition-all duration-300 ${
                                 isFullyAddressed ? 'bg-green-500' : 'bg-blue-medium'
@@ -422,7 +424,7 @@ export default function Home() {
                   </button>
 
                   {/* Card footer actions */}
-                  <div className="border-t border-navy/5 px-5 py-2 flex items-center justify-between">
+                  <div className="border-t border-ink/5 px-5 py-2 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       {/* Show Mark Complete when 100% addressed and still in_progress */}
                       {assessment.status === 'in_progress' &&
@@ -475,9 +477,9 @@ export default function Home() {
         ) : (
           /* Empty state */
           <div className="text-center py-16">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-navy/5 flex items-center justify-center">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-ink/5 flex items-center justify-center">
               <svg
-                className="w-8 h-8 text-navy/20"
+                className="w-8 h-8 text-ink/20"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -491,12 +493,12 @@ export default function Home() {
                 />
               </svg>
             </div>
-            <h3 className="text-lg font-semibold text-navy/60 mb-1">
+            <h3 className="text-lg font-semibold text-ink/60 mb-1">
               {filter === 'all'
                 ? 'No assessments yet'
                 : `No ${filter === 'in_progress' ? 'in-progress' : 'completed'} assessments`}
             </h3>
-            <p className="text-sm text-navy/40 mb-6">
+            <p className="text-sm text-ink/40 mb-6">
               {filter === 'all'
                 ? 'Start your first CPTED residential site assessment'
                 : 'Assessments will appear here once they match this filter'}
@@ -514,7 +516,7 @@ export default function Home() {
       </div>
 
       {/* Version indicator */}
-      <p className="text-center text-[10px] text-navy/50 mt-6">v0.9.1</p>
+      <p className="text-center text-[10px] text-ink/50 mt-6">v0.10.0</p>
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog

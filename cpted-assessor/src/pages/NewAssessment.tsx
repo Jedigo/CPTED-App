@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { db } from '../db/database'
 import { ZONES } from '../data/zones'
 import HeaderBackButton from '../components/HeaderBackButton'
+import ThemeToggle from '../components/ThemeToggle'
 import type {
   Assessment,
   AssessmentType,
@@ -113,26 +114,27 @@ export default function NewAssessment() {
   }
 
   const inputClass = (field: string) =>
-    `w-full rounded-lg border px-4 py-3 text-base bg-white outline-none transition-colors ${
+    `w-full rounded-lg border px-4 py-3 text-base bg-surface outline-none transition-colors ${
       errors[field]
         ? 'border-red-500 ring-2 ring-red-200'
-        : 'border-navy/20 focus:border-blue-medium focus:ring-2 focus:ring-blue-medium/30'
+        : 'border-ink/20 focus:border-blue-medium focus:ring-2 focus:ring-blue-medium/30'
     }`
 
-  const labelClass = 'block text-sm font-semibold text-navy mb-1'
+  const labelClass = 'block text-sm font-semibold text-ink mb-1'
 
   return (
     <div className="min-h-full bg-blue-pale">
       {/* Header */}
       <header className="bg-navy text-white px-6 py-4 flex items-center gap-4">
         <HeaderBackButton to="/" label="Back" />
-        <h1 className="text-xl font-bold">New Assessment</h1>
+        <h1 className="text-xl font-bold flex-1">New Assessment</h1>
+        <ThemeToggle />
       </header>
 
       <form onSubmit={handleSubmit} className="max-w-3xl mx-auto p-6 space-y-6 pb-24">
         {/* Property Information */}
-        <section className="bg-white rounded-xl shadow-sm border border-navy/10 p-6">
-          <h2 className="text-lg font-bold text-navy mb-4">Property Information</h2>
+        <section className="bg-surface rounded-xl shadow-sm border border-ink/10 p-6">
+          <h2 className="text-lg font-bold text-ink mb-4">Property Information</h2>
           <div className="space-y-4">
             <div>
               <label className={labelClass}>
@@ -230,7 +232,7 @@ export default function NewAssessment() {
               <select
                 value="single_family_residential"
                 disabled
-                className="w-full rounded-lg border border-navy/20 px-4 py-3 text-base bg-gray-50 text-navy/70"
+                className="w-full rounded-lg border border-ink/20 px-4 py-3 text-base bg-gray-50 text-ink/70"
               >
                 <option value="single_family_residential">
                   Single Family Residential
@@ -241,8 +243,8 @@ export default function NewAssessment() {
         </section>
 
         {/* Assessor Information */}
-        <section className="bg-white rounded-xl shadow-sm border border-navy/10 p-6">
-          <h2 className="text-lg font-bold text-navy mb-4">Assessor Information</h2>
+        <section className="bg-surface rounded-xl shadow-sm border border-ink/10 p-6">
+          <h2 className="text-lg font-bold text-ink mb-4">Assessor Information</h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>
@@ -273,8 +275,8 @@ export default function NewAssessment() {
         </section>
 
         {/* Assessment Details */}
-        <section className="bg-white rounded-xl shadow-sm border border-navy/10 p-6">
-          <h2 className="text-lg font-bold text-navy mb-4">Assessment Details</h2>
+        <section className="bg-surface rounded-xl shadow-sm border border-ink/10 p-6">
+          <h2 className="text-lg font-bold text-ink mb-4">Assessment Details</h2>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -282,7 +284,7 @@ export default function NewAssessment() {
                 <select
                   value={assessmentType}
                   onChange={(e) => setAssessmentType(e.target.value as AssessmentType)}
-                  className="w-full rounded-lg border border-navy/20 px-4 py-3 text-base bg-white outline-none focus:border-blue-medium focus:ring-2 focus:ring-blue-medium/30"
+                  className="w-full rounded-lg border border-ink/20 px-4 py-3 text-base bg-surface outline-none focus:border-blue-medium focus:ring-2 focus:ring-blue-medium/30"
                 >
                   <option value="initial">Initial</option>
                   <option value="follow_up">Follow-Up</option>
@@ -294,7 +296,7 @@ export default function NewAssessment() {
                 <select
                   value={timeOfAssessment}
                   onChange={(e) => setTimeOfAssessment(e.target.value as TimeOfAssessment)}
-                  className="w-full rounded-lg border border-navy/20 px-4 py-3 text-base bg-white outline-none focus:border-blue-medium focus:ring-2 focus:ring-blue-medium/30"
+                  className="w-full rounded-lg border border-ink/20 px-4 py-3 text-base bg-surface outline-none focus:border-blue-medium focus:ring-2 focus:ring-blue-medium/30"
                 >
                   <option value="daytime">Daytime</option>
                   <option value="nighttime">Nighttime</option>
@@ -310,7 +312,7 @@ export default function NewAssessment() {
                   type="date"
                   value={dateOfAssessment}
                   onChange={(e) => setDateOfAssessment(e.target.value)}
-                  className="w-full rounded-lg border border-navy/20 px-4 py-3 text-base bg-white outline-none focus:border-blue-medium focus:ring-2 focus:ring-blue-medium/30"
+                  className="w-full rounded-lg border border-ink/20 px-4 py-3 text-base bg-surface outline-none focus:border-blue-medium focus:ring-2 focus:ring-blue-medium/30"
                 />
               </div>
               <div>

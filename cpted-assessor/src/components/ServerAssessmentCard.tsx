@@ -36,18 +36,18 @@ export default function ServerAssessmentCard({
       : 0;
 
   return (
-    <div className="bg-white rounded-xl border border-navy/10 shadow-sm">
+    <div className="bg-surface rounded-xl border border-ink/10 shadow-sm">
       <div className="p-5">
         <div className="flex items-start justify-between gap-4">
           {/* Left: Property info */}
           <div className="min-w-0 flex-1">
-            <h3 className="text-base font-bold text-navy truncate">
+            <h3 className="text-base font-bold text-ink truncate">
               {assessment.address}
             </h3>
-            <p className="text-sm text-navy/50 mt-0.5">
+            <p className="text-sm text-ink/50 mt-0.5">
               {assessment.city}, {assessment.state} {assessment.zip}
             </p>
-            <div className="flex items-center gap-3 mt-2 text-sm text-navy/40">
+            <div className="flex items-center gap-3 mt-2 text-sm text-ink/40">
               <span>{assessment.assessor_name}</span>
               <span>&middot;</span>
               <span>{formatDate(assessment.date_of_assessment || assessment.created_at)}</span>
@@ -67,13 +67,13 @@ export default function ServerAssessmentCard({
                 <span className={`text-2xl font-bold ${getScoreColor(assessment.overall_score)}`}>
                   {assessment.overall_score.toFixed(1)}
                 </span>
-                <span className="text-xs text-navy/30 ml-0.5">/5</span>
+                <span className="text-xs text-ink/30 ml-0.5">/5</span>
                 <p className={`text-xs font-medium ${getScoreColor(assessment.overall_score)}`}>
                   {getScoreLabel(assessment.overall_score)}
                 </p>
               </div>
             ) : (
-              <span className="text-sm text-navy/25">No score</span>
+              <span className="text-sm text-ink/25">No score</span>
             )}
           </div>
         </div>
@@ -84,10 +84,10 @@ export default function ServerAssessmentCard({
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs text-blue-600">{pullProgress.message}</span>
               {pullProgress.phase === 'photos' && (
-                <span className="text-xs text-navy/30">{progressPct}%</span>
+                <span className="text-xs text-ink/30">{progressPct}%</span>
               )}
             </div>
-            <div className="h-1.5 bg-navy/5 rounded-full overflow-hidden">
+            <div className="h-1.5 bg-ink/5 rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-300 bg-blue-medium ${
                   pullProgress.phase === 'metadata' ? 'animate-pulse' : ''
@@ -102,7 +102,7 @@ export default function ServerAssessmentCard({
       </div>
 
       {/* Footer with action button */}
-      <div className="border-t border-navy/5 px-5 py-2.5 flex items-center justify-end">
+      <div className="border-t border-ink/5 px-5 py-2.5 flex items-center justify-end">
         <button
           type="button"
           onClick={() => onPull(assessment.id)}
@@ -111,7 +111,7 @@ export default function ServerAssessmentCard({
             pulling
               ? 'bg-blue-50 text-blue-400 cursor-wait'
               : disabled
-                ? 'bg-navy/5 text-navy/25 cursor-not-allowed'
+                ? 'bg-ink/5 text-ink/25 cursor-not-allowed'
                 : isLocal
                   ? 'text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 active:scale-95'
                   : 'text-white bg-navy hover:bg-navy-light active:scale-95'

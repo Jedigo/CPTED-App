@@ -57,12 +57,12 @@ export default function ChecklistItem({
         isNa
           ? 'bg-gray-50 border-gray-200 opacity-60'
           : isScored
-            ? 'border-l-4 border-l-score-good bg-white border-t border-r border-b border-t-navy/10 border-r-navy/10 border-b-navy/10'
-            : 'bg-white border-navy/10'
+            ? 'border-l-4 border-l-score-good bg-surface border-t border-r border-b border-t-navy/10 border-r-navy/10 border-b-navy/10'
+            : 'bg-surface border-ink/10'
       }`}
     >
       <p
-        className={`text-sm leading-relaxed mb-3 ${isNa ? 'text-navy/50' : 'text-navy'}`}
+        className={`text-sm leading-relaxed mb-3 ${isNa ? 'text-ink/50' : 'text-ink'}`}
       >
         {itemScore.item_text}
       </p>
@@ -81,7 +81,7 @@ export default function ChecklistItem({
           className={`px-3 h-11 rounded-lg text-sm font-medium border-2 transition-all active:scale-95 ${
             itemScore.notes
               ? 'bg-blue-medium text-white border-blue-medium'
-              : 'bg-white border-navy/20 text-navy/50 hover:border-navy/40'
+              : 'bg-surface border-ink/20 text-ink/50 hover:border-ink/40'
           }`}
         >
           Note
@@ -104,7 +104,7 @@ export default function ChecklistItem({
           className={`px-3 h-11 rounded-lg text-sm font-medium border-2 transition-all active:scale-95 ${
             photoCount > 0
               ? 'bg-blue-medium text-white border-blue-medium'
-              : 'bg-white border-navy/20 text-navy/50 hover:border-navy/40'
+              : 'bg-surface border-ink/20 text-ink/50 hover:border-ink/40'
           } ${saving ? 'opacity-50 cursor-wait' : ''}`}
         >
           {saving ? 'Saving...' : photoCount > 0 ? `Photo (${photoCount})` : 'Photo'}
@@ -140,7 +140,7 @@ export default function ChecklistItem({
           onBlur={() => onNotesChange(noteText)}
           placeholder="Add a note..."
           rows={2}
-          className="mt-3 w-full rounded-lg border border-navy/20 px-3 py-2 text-sm bg-white outline-none focus:border-blue-medium focus:ring-2 focus:ring-blue-medium/30 resize-y"
+          className="mt-3 w-full rounded-lg border border-ink/20 px-3 py-2 text-sm bg-surface outline-none focus:border-blue-medium focus:ring-2 focus:ring-blue-medium/30 resize-y"
         />
       )}
     </div>
