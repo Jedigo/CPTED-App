@@ -74,6 +74,64 @@ export function generateRecommendations(
   }));
 }
 
+// --- Auto-Fence Recommendation ---
+
+const FENCE_TRIGGER_ITEMS = new Set([
+  'Rear yard at least partially visible from one or more neighboring properties',
+  'Rear fence/gate is secured with quality lock (not just a flip latch)',
+  'Rear property boundaries clearly defined',
+]);
+
+const FENCE_RECOMMENDATION_TEXT =
+  'Install or upgrade rear yard fencing using a CPTED-approved semi-open design (e.g., aluminum picket, wrought iron style, or chain-link with visibility) that maintains natural surveillance from neighboring properties while establishing clear territorial boundaries. Avoid solid 6-foot privacy fences that create concealment opportunities. Ideal height is 4-5 feet with at least 50% visibility through the fence material. Include a self-closing, self-latching gate with a quality lock.';
+
+const HOA_ADDENDUM =
+  ' Note: Check with your HOA or local code enforcement for approved fence styles, heights, and materials before installation.';
+
+/**
+ * Generate a CPTED fencing recommendation when rear yard fence-related items
+ * are scored N/A, 1, or 2. Appended to the recommendations list if triggered.
+ */
+export function generateFenceRecommendation(
+  allItems: ItemScore[],
+  assessmentId: string,
+  existingRecs: Recommendation[],
+): Recommendation | null {
+  // Check if existing recommendations already mention fencing
+  if (existingRecs.some((r) => /fence/i.test(r.description))) return null;
+
+  const rearYardItems = allItems.filter(
+    (item) => item.zone_key === 'rear_yard' && FENCE_TRIGGER_ITEMS.has(item.item_text),
+  );
+
+  // Check if any trigger item is scored N/A, 1, or 2
+  const triggerItems = rearYardItems.filter(
+    (item) => item.is_na || (item.score !== null && item.score <= 2),
+  );
+
+  if (triggerItems.length === 0) return null;
+
+  // Priority: high if any scored 1, medium if scored 2 or N/A
+  const hasScore1 = triggerItems.some((item) => item.score === 1);
+  const priority: 'high' | 'medium' = hasScore1 ? 'high' : 'medium';
+
+  // Check item notes for HOA mention
+  const hasHOA = rearYardItems.some(
+    (item) => item.notes && /hoa/i.test(item.notes),
+  );
+
+  const description = FENCE_RECOMMENDATION_TEXT + (hasHOA ? HOA_ADDENDUM : '');
+
+  return {
+    id: uuidv4(),
+    assessment_id: assessmentId,
+    order: existingRecs.length + 1,
+    description: `Rear Yard & Back Entry — Fencing Upgrade: ${description}`,
+    priority,
+    type: 'recommendation' as const,
+  };
+}
+
 /**
  * Generate quick wins — items that are easy to fix.
  * Prioritizes maintenance/lighting/behavioral items scored 2-3,

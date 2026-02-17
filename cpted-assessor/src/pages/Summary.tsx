@@ -11,7 +11,7 @@ import {
   getCompletionCounts,
 } from '../services/scoring';
 import { generatePDF } from '../services/pdf';
-import { generateRecommendations, generateQuickWins } from '../services/recommendations';
+import { generateRecommendations, generateQuickWins, generateFenceRecommendation } from '../services/recommendations';
 import { syncAssessment, checkServerHealth } from '../services/sync';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import HeaderBackButton from '../components/HeaderBackButton';
@@ -115,6 +115,8 @@ export default function Summary() {
     try {
       setRecsError(null);
       const recs = generateRecommendations(itemScores, id, 5);
+      const fenceRec = generateFenceRecommendation(itemScores, id, recs);
+      if (fenceRec) recs.push(fenceRec);
       const qw = generateQuickWins(itemScores, id, 5);
       setRecommendations(recs);
       setQuickWins(qw);
@@ -389,10 +391,10 @@ export default function Summary() {
           </div>
         )}
 
-        {/* Top 5 Recommendations */}
+        {/* Top Recommendations */}
         <div className="bg-white rounded-xl border border-navy/10 shadow-sm p-6">
           <h2 className="text-sm font-bold text-navy/60 uppercase tracking-wide mb-3">
-            Top 5 Recommendations
+            Top Recommendations
           </h2>
           {id && (
             <RecommendationEditor

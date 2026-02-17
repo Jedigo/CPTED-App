@@ -239,11 +239,10 @@ This requires building a knowledge base mapping each of the 64 checklist items t
 
 ## Current Status
 
-**v0.8.0 deployed.** Checklist trimmed from 141 to 64 items. Phase 2 backend live. PDF report polished. Photo storage uses base64 data URLs (Safari fix). Redeploy with `./deploy.sh`.
+**v0.9.0 deployed.** Auto-explain deficient findings and auto-fence recommendation features added. Checklist trimmed from 141 to 64 items. Phase 2 backend live. PDF report polished. Photo storage uses base64 data URLs (Safari fix). Redeploy with `./deploy.sh`.
 
 **Remaining items:**
-- PWA icons are SVG placeholders — need proper PNGs before production deployment
-- Server-side report storage for cross-device PDF access not yet implemented
+- (none currently)
 
 Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch: `main`)
 

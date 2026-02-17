@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { assessments, zoneScores, itemScores, photos } from '../db/schema.js';
 import { ZONES } from '../data/zones.js';
+import { ITEM_GUIDANCE } from '../data/item-guidance.js';
 import { getScoreLabel, getCompletionCounts } from './scoring.js';
 
 // --- Design constants ---
@@ -496,7 +497,7 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
 
     let hasPriorSection = false;
 
-    // --- Areas Requiring Attention (scores 1-2) ---
+    // --- Areas Requiring Attention (scores 1-2) with CPTED guidance ---
     if (concerns.length > 0) {
       y = ensureSpace(doc, 25, y);
       doc.setFillColor('#FEF2F2');
@@ -505,45 +506,94 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
       doc.setFont('helvetica', 'bold');
       doc.setTextColor('#991B1B');
       doc.text('Areas Requiring Attention', PAGE_MARGIN + 3, y + 5.5);
-      y += 10;
+      y += 12;
 
-      const concernRows = concerns
-        .sort((a, b) => a.score! - b.score!)
-        .map((item) => [item.item_text, getScoreLabel(item.score!), item.notes || '']);
+      const sortedConcerns = [...concerns].sort((a, b) => a.score! - b.score!);
 
-      autoTable(doc, {
-        startY: y,
-        head: [['Observation', 'Rating', 'Assessor Notes']],
-        body: concernRows,
-        margin: { left: PAGE_MARGIN, right: PAGE_MARGIN },
-        theme: 'grid',
-        headStyles: {
-          fillColor: '#FEE2E2',
-          textColor: '#991B1B',
-          fontStyle: 'bold',
-          fontSize: 8,
-        },
-        bodyStyles: { fontSize: 8, textColor: [50, 50, 50], cellPadding: 2.5 },
-        columnStyles: {
-          0: { cellWidth: 'auto' },
-          1: { cellWidth: 22, halign: 'center', fontStyle: 'bold' },
-          2: { cellWidth: 45, fontSize: 7 },
-        },
-        didParseCell(hookData) {
-          if (hookData.section === 'body' && hookData.column.index === 1) {
-            const label = hookData.cell.raw as string;
-            if (label === 'Critical') {
-              hookData.cell.styles.textColor = getScoreColorHex(1);
-            } else if (label === 'Deficient') {
-              hookData.cell.styles.textColor = getScoreColorHex(2);
-            }
-          }
-        },
-      });
+      for (const item of sortedConcerns) {
+        const guidance = ITEM_GUIDANCE.get(item.item_text);
+        // Estimate height: item row ~14, notes ~8, guidance ~24
+        const estimatedHeight = 14 + (item.notes ? 8 : 0) + (guidance ? 28 : 0);
+        y = ensureSpace(doc, estimatedHeight, y);
 
-      y =
-        (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY +
-        8;
+        // Item row — light red background
+        doc.setFillColor('#FEE2E2');
+        const itemLines = doc.splitTextToSize(item.item_text, CONTENT_WIDTH - 30);
+        const itemRowHeight = Math.max(itemLines.length * 3.5 + 4, 10);
+        doc.roundedRect(PAGE_MARGIN, y, CONTENT_WIDTH, itemRowHeight, 1, 1, 'F');
+
+        // Item text
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(50);
+        doc.text(itemLines, PAGE_MARGIN + 3, y + 4);
+
+        // Rating badge on right
+        const ratingLabel = getScoreLabel(item.score!);
+        const badgeWidth = 20;
+        const badgeX = PAGE_WIDTH - PAGE_MARGIN - badgeWidth - 2;
+        doc.setFillColor(getScoreColorHex(item.score!));
+        doc.roundedRect(badgeX, y + 1.5, badgeWidth, 5, 1, 1, 'F');
+        doc.setFontSize(6);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor('#FFFFFF');
+        doc.text(ratingLabel, badgeX + badgeWidth / 2, y + 4.8, { align: 'center' });
+
+        y += itemRowHeight + 1;
+
+        // Assessor notes (if present)
+        if (item.notes.trim()) {
+          doc.setFontSize(7);
+          doc.setFont('helvetica', 'italic');
+          doc.setTextColor(100);
+          const noteLines = doc.splitTextToSize(`Assessor: ${item.notes.trim()}`, CONTENT_WIDTH - 8);
+          doc.text(noteLines, PAGE_MARGIN + 5, y + 2);
+          y += noteLines.length * 3 + 3;
+        }
+
+        // CPTED Guidance block (if found)
+        if (guidance) {
+          doc.setFontSize(7);
+          const standardLines = doc.splitTextToSize(guidance.standard, CONTENT_WIDTH - 16);
+          const improvementLines = doc.splitTextToSize(guidance.improvement, CONTENT_WIDTH - 16);
+          // 4 top padding + label(3.5) + standard lines + 4 gap + label(3.5) + improvement lines + 4 bottom
+          const guidanceHeight = 4 + 3.5 + standardLines.length * 3 + 4 + 3.5 + improvementLines.length * 3 + 4;
+          y = ensureSpace(doc, guidanceHeight, y);
+
+          doc.setFillColor('#FFF5F5');
+          doc.roundedRect(PAGE_MARGIN + 3, y, CONTENT_WIDTH - 6, guidanceHeight, 1, 1, 'F');
+
+          // Accent bar on left
+          doc.setFillColor('#DC2626');
+          doc.rect(PAGE_MARGIN + 3, y, 1.5, guidanceHeight, 'F');
+
+          let gy = y + 4;
+          // "CPTED Standard" label
+          doc.setFontSize(7);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor('#991B1B');
+          doc.text('CPTED Standard:', PAGE_MARGIN + 8, gy);
+          gy += 3.5;
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(60);
+          doc.text(standardLines, PAGE_MARGIN + 8, gy);
+          gy += standardLines.length * 3 + 4;
+
+          // "How to Improve" label
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor('#991B1B');
+          doc.text('How to Improve:', PAGE_MARGIN + 8, gy);
+          gy += 3.5;
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(60);
+          doc.text(improvementLines, PAGE_MARGIN + 8, gy);
+
+          y += guidanceHeight + 3;
+        }
+
+        y += 3; // Gap before next item
+      }
+
       hasPriorSection = true;
     }
 
@@ -733,23 +783,38 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
         try {
           doc.addImage(b64, 'JPEG', x, y, photoWidth, photoWidth * 0.75);
 
-          // Caption: item text + timestamp (no GPS)
+          // Caption: context-aware based on item score
           doc.setFontSize(6);
-          doc.setFont('helvetica', 'normal');
           doc.setTextColor(100);
           const captionParts: string[] = [];
 
-          // Look up associated checklist item text
           if (photo.item_score_id) {
             const itemScore = data.itemScores.find(
               (is) => is.id === photo.item_score_id,
             );
-            if (itemScore) {
-              const itemText =
-                itemScore.item_text.length > 80
-                  ? itemScore.item_text.substring(0, 77) + '...'
-                  : itemScore.item_text;
-              captionParts.push(itemText);
+            if (itemScore && itemScore.score !== null && !itemScore.is_na) {
+              const score = itemScore.score;
+              const guidance = ITEM_GUIDANCE.get(itemScore.item_text);
+              let caption: string;
+
+              if (score <= 2 && guidance) {
+                // Deficient — describe the issue using the CPTED standard
+                caption = `${getScoreLabel(score)}: ${guidance.standard}`;
+              } else if (score >= 4) {
+                // Good/Excellent — describe what was done right
+                caption = `${getScoreLabel(score)}: ${itemScore.item_text}`;
+              } else if (itemScore.notes.trim()) {
+                // Score 3 — show assessor notes
+                caption = itemScore.notes.trim();
+              } else {
+                caption = itemScore.item_text;
+              }
+
+              captionParts.push(
+                caption.length > 120 ? caption.substring(0, 117) + '...' : caption,
+              );
+            } else if (itemScore) {
+              captionParts.push(itemScore.item_text);
             }
           }
 
@@ -769,6 +834,7 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
           }
 
           if (captionParts.length > 0) {
+            doc.setFont('helvetica', 'normal');
             const captionText = captionParts.join(' \u2014 ');
             const captionLines = doc.splitTextToSize(captionText, photoWidth);
             doc.text(captionLines, x, y + photoWidth * 0.75 + 3);
@@ -827,9 +893,14 @@ function renderRecommendations(doc: jsPDF, data: PDFData): void {
     y += 10;
   } else {
     for (let i = 0; i < recs.length; i++) {
-      y = ensureSpace(doc, 20, y);
-      renderRecommendationItem(doc, recs[i], i + 1, y);
-      y += 18;
+      const rec = recs[i];
+      // Pre-calculate height for ensureSpace
+      doc.setFontSize(9);
+      const preCalcLines = doc.splitTextToSize(rec.description, CONTENT_WIDTH - 12);
+      const itemHeight = 8 + preCalcLines.length * 4 + 4;
+      y = ensureSpace(doc, itemHeight, y);
+      const actualHeight = renderRecommendationItem(doc, rec, i + 1, y);
+      y += actualHeight;
     }
   }
 
@@ -867,7 +938,7 @@ function renderRecommendationItem(
   rec: Recommendation,
   num: number,
   y: number,
-): void {
+): number {
   doc.setFillColor(NAVY);
   doc.circle(PAGE_MARGIN + 4, y + 2, 3.5, 'F');
   doc.setFontSize(8);
@@ -893,6 +964,9 @@ function renderRecommendationItem(
   doc.setTextColor(50);
   const descLines = doc.splitTextToSize(rec.description, CONTENT_WIDTH - 12);
   doc.text(descLines, PAGE_MARGIN + 12, y + 8);
+
+  // Return total height: 8 (top padding to text start) + text lines + 4 bottom padding
+  return 8 + descLines.length * 4 + 4;
 }
 
 function renderQuickWinItem(doc: jsPDF, item: Recommendation, y: number): void {
