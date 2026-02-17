@@ -239,7 +239,11 @@ This requires building a knowledge base mapping each of the 64 checklist items t
 
 ## Current Status
 
-**Phase 2 backend deployed. PDF report polished with 7 visual improvements.** Photo storage migrated from Blob to base64 data URLs to fix Safari IndexedDB bug. Known bug: auto-generate recommendations button broken. Redeploy with `./deploy.sh`.
+**v0.8.0 deployed.** Checklist trimmed from 141 to 64 items. Phase 2 backend live. PDF report polished. Photo storage uses base64 data URLs (Safari fix). Redeploy with `./deploy.sh`.
+
+**Remaining items:**
+- PWA icons are SVG placeholders — need proper PNGs before production deployment
+- Server-side report storage for cross-device PDF access not yet implemented
 
 Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch: `main`)
 
@@ -267,7 +271,6 @@ Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch:
 - Zone 7 "Next Zone" replaced with "Go to Summary" button
 - Fixed PDF bug: item matching used `item_order` (global per zone) instead of `item_text`, causing dashes for all principles after the first
 - Created `/close-session` global skill at `~/.claude/skills/close-session/SKILL.md`
-- Next: PDF report visual polish (see `~/.claude/projects/.../memory/todo.md`)
 
 ### 2026-02-14 — Phase 2 Backend: Build + Deploy
 - **All 8 steps implemented:** server scaffolding, DB schema, CRUD, photo upload, sync, server-side PDF, frontend sync UI, Docker + deploy
@@ -279,7 +282,6 @@ Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch:
 - Deployed to `cpted-server` VM (Ubuntu 24.04, Tailscale 100.91.180.116) at `~/cpted-app/`
 - Fixed: `state` column widened from varchar(2) to varchar(50), sync transaction rewritten to use Drizzle `db.transaction()` instead of manual BEGIN/COMMIT on pool client
 - Verified iPad → Tailscale → server sync end-to-end
-- Next: commit Phase 2 code, test server-side PDF download, photo sync from iPad
 
 ### 2026-02-14 — PDF Report Polish + Photo Storage Fix
 - **7 PDF visual improvements** applied to both client (`cpted-assessor/src/services/pdf.ts`) and server (`server/src/services/pdf.ts`):
@@ -294,5 +296,3 @@ Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch:
 - Updated Photo type, `compressImage()`, `savePhoto()`, `PhotoThumbnail`, `PhotoViewer`, `sync.ts`, and `pdf.ts` to use new format with legacy Blob fallback
 - Added version indicator (`v0.6.1`) to Home screen footer
 - Versions: `cpted-assessor` 0.6.1, `server` 0.1.1
-- **Known bug:** Auto-generate recommendations button on Summary page is broken
-- Next: fix recommendations bug, add server-side report storage for cross-device access

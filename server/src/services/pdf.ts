@@ -1,4 +1,4 @@
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 import autoTableModule from 'jspdf-autotable';
 const autoTable = autoTableModule.default ?? autoTableModule;
 import fs from 'fs/promises';
