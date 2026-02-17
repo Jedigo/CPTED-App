@@ -127,11 +127,12 @@ export default function Home() {
     }
   }, []);
 
+  // Fetch server assessments on mount (for tab count) and when Server tab is selected
   useEffect(() => {
-    if (filter === 'server' && online) {
+    if (online) {
       loadServerAssessments();
     }
-  }, [filter, online, loadServerAssessments]);
+  }, [online, loadServerAssessments]);
 
   // Check if a server assessment exists locally
   const localIds = new Set(assessments?.map((a) => a.id) || []);
@@ -434,7 +435,7 @@ export default function Home() {
                               e.stopPropagation();
                               handleMarkComplete(assessment.id);
                             }}
-                            className="text-xs font-semibold text-green-600 hover:text-green-700 bg-green-50 hover:bg-green-100 px-3 py-1 rounded-lg transition-colors"
+                            className="text-xs font-semibold text-white bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded-lg transition-colors"
                             aria-label={`Mark assessment for ${assessment.address} as complete`}
                           >
                             Mark Complete
@@ -461,7 +462,7 @@ export default function Home() {
                         e.stopPropagation();
                         setDeleteTarget(assessment);
                       }}
-                      className="text-xs text-navy/30 hover:text-red-500 font-medium transition-colors px-2 py-1"
+                      className="text-xs text-red-400 hover:text-white hover:bg-red-500 font-semibold transition-colors px-3 py-1.5 rounded-lg border border-red-300 hover:border-red-500"
                       aria-label={`Delete assessment for ${assessment.address}`}
                     >
                       Delete
@@ -513,7 +514,7 @@ export default function Home() {
       </div>
 
       {/* Version indicator */}
-      <p className="text-center text-[10px] text-navy/20 mt-6">v0.7.0</p>
+      <p className="text-center text-[10px] text-navy/50 mt-6">v0.8.0</p>
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog

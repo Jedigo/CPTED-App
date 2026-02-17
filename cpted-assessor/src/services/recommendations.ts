@@ -5,8 +5,6 @@ import { ZONES } from '../data/zones';
 // Principles where fixes tend to be low-cost / quick to implement
 const QUICK_WIN_PRINCIPLES = new Set([
   'maintenance',
-  'lighting_controls',
-  'fixture_glare',
   'behavioral',
 ]);
 
@@ -46,17 +44,6 @@ function getPriority(score: number): 'high' | 'medium' | 'low' {
   return 'low';
 }
 
-function getTimeline(score: number): string {
-  if (score <= 1) return 'Immediate';
-  if (score <= 2) return '1-3 months';
-  return '3-6 months';
-}
-
-function getQuickWinTimeline(score: number): string {
-  if (score <= 2) return 'Immediate';
-  return '1-4 weeks';
-}
-
 /**
  * Generate top recommendations from the worst-scoring items.
  * Picks the lowest-scored items (1s first, then 2s), up to `count`.
@@ -83,7 +70,6 @@ export function generateRecommendations(
     order: idx + 1,
     description: `${c.zoneName} — ${c.principleName}: ${c.item.item_text}`,
     priority: getPriority(c.item.score!),
-    timeline: getTimeline(c.item.score!),
     type: 'recommendation' as const,
   }));
 }
@@ -140,7 +126,6 @@ export function generateQuickWins(
     order: idx + 1,
     description: `${c.zoneName} — ${c.principleName}: ${c.item.item_text}`,
     priority: c.item.score! <= 2 ? 'medium' as const : 'low' as const,
-    timeline: getQuickWinTimeline(c.item.score!),
     type: 'quick_win' as const,
   }));
 }

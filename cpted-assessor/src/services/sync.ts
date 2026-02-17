@@ -66,7 +66,7 @@ export async function syncAssessment(assessmentId: string): Promise<SyncResult> 
     },
     zone_scores: zoneScores,
     item_scores: itemScores,
-    photos: photos.map(({ blob, ...rest }) => rest),
+    photos: photos.map(({ blob, data, ...rest }) => rest),
   };
 
   const syncRes = await fetch(`${API_BASE}/api/sync`, {
@@ -82,11 +82,11 @@ export async function syncAssessment(assessmentId: string): Promise<SyncResult> 
 
   const syncData = await syncRes.json();
 
-  // 2. Upload unsynced photos
+  // 2. Upload all photos (always re-upload to handle previously failed uploads)
   let photosUploaded = 0;
-  const unsyncedPhotos = photos.filter((p) => !p.synced);
+  const uploadablePhotos = photos.filter((p) => p.data || p.blob);
 
-  for (const photo of unsyncedPhotos) {
+  for (const photo of uploadablePhotos) {
     try {
       await uploadPhoto(assessmentId, photo);
       // Mark photo as synced in IndexedDB
@@ -118,8 +118,7 @@ async function uploadPhoto(assessmentId: string, photo: Photo): Promise<void> {
   // Convert base64 data URL (or legacy Blob) to File for upload
   let fileData: Blob;
   if (photo.data) {
-    const resp = await fetch(photo.data);
-    fileData = await resp.blob();
+    fileData = dataUrlToBlob(photo.data);
   } else if (photo.blob) {
     fileData = photo.blob;
   } else {
@@ -297,6 +296,17 @@ export async function pullAssessment(
   onProgress?.({ phase: 'done', current: totalPhotos, total: totalPhotos, message: 'Download complete!' });
 
   return { success: true, assessmentId: id, photosDownloaded };
+}
+
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [header, base64] = dataUrl.split(',');
+  const mime = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: mime });
 }
 
 function blobToDataUrl(blob: Blob): Promise<string> {

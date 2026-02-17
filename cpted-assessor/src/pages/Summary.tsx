@@ -233,6 +233,15 @@ export default function Summary() {
       {/* Header */}
       <header className="bg-navy text-white px-4 sm:px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+          <Link
+            to="/"
+            className="inline-flex items-center justify-center w-9 h-9 rounded-lg text-white/80 hover:text-white bg-white/10 hover:bg-white/20 active:scale-95 transition-all flex-shrink-0"
+            aria-label="Home"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z" />
+            </svg>
+          </Link>
           <HeaderBackButton to={`/assessment/${id}`} label="Assessment" className="flex-shrink-0" />
           <h1 className="text-base sm:text-lg font-bold truncate">
             {assessment.address}

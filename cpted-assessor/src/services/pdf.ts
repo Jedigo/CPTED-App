@@ -518,8 +518,9 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
       hasPriorSection = true;
     }
 
-    // --- Opportunities for Enhancement (score 3) ---
-    if (improvements.length > 0) {
+    // --- Opportunities for Enhancement (score 3, only if assessor added notes) ---
+    const improvementsWithNotes = improvements.filter((s) => s.notes.trim());
+    if (improvementsWithNotes.length > 0) {
       // Divider between sections
       if (hasPriorSection) {
         doc.setDrawColor(LIGHT_BLUE);
@@ -530,9 +531,6 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
 
       y = ensureSpace(doc, 20, y);
 
-      const withNotes = improvements.filter((s) => s.notes.trim());
-      const withoutNotes = improvements.filter((s) => !s.notes.trim());
-
       // Section header
       doc.setFillColor('#FEFCE8');
       doc.rect(PAGE_MARGIN, y, CONTENT_WIDTH, 8, 'F');
@@ -542,77 +540,43 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
       doc.text('Opportunities for Enhancement', PAGE_MARGIN + 3, y + 5.5);
       y += 10;
 
-      // Intro sentence
       doc.setFontSize(8);
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(80);
       doc.text(
-        'The following items meet basic security standards but present opportunities for enhancement:',
+        'The following items meet basic standards but could be improved:',
         PAGE_MARGIN + 2,
         y,
       );
       y += 5;
 
-      if (withNotes.length > 0) {
-        const noteRows = withNotes.map((item) => [
-          item.item_text,
-          item.notes,
-        ]);
+      const noteRows = improvementsWithNotes.map((item) => [
+        item.item_text,
+        item.notes,
+      ]);
 
-        autoTable(doc, {
-          startY: y,
-          head: [['Observation', 'Assessor Notes']],
-          body: noteRows,
-          margin: { left: PAGE_MARGIN, right: PAGE_MARGIN },
-          theme: 'grid',
-          headStyles: {
-            fillColor: '#FEF9C3',
-            textColor: '#854D0E',
-            fontStyle: 'bold',
-            fontSize: 8,
-          },
-          bodyStyles: { fontSize: 8, textColor: [50, 50, 50], cellPadding: 2.5 },
-          columnStyles: {
-            0: { cellWidth: 'auto' },
-            1: { cellWidth: 45, fontSize: 7 },
-          },
-        });
+      autoTable(doc, {
+        startY: y,
+        head: [['Observation', 'Assessor Notes']],
+        body: noteRows,
+        margin: { left: PAGE_MARGIN, right: PAGE_MARGIN },
+        theme: 'grid',
+        headStyles: {
+          fillColor: '#FEF9C3',
+          textColor: '#854D0E',
+          fontStyle: 'bold',
+          fontSize: 8,
+        },
+        bodyStyles: { fontSize: 8, textColor: [50, 50, 50], cellPadding: 2.5 },
+        columnStyles: {
+          0: { cellWidth: 'auto' },
+          1: { cellWidth: 45, fontSize: 7 },
+        },
+      });
 
-        y =
-          (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable
-            .finalY + 3;
-      }
-
-      if (withoutNotes.length > 0) {
-        doc.setFontSize(8);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(80);
-
-        // Show up to 3 bullets, then summarize the rest
-        const showItems = withoutNotes.slice(0, 3);
-        const remainingCount = withoutNotes.length - showItems.length;
-
-        for (const item of showItems) {
-          y = ensureSpace(doc, 6, y);
-          const bulletText = `\u2022  ${item.item_text}`;
-          const lines = doc.splitTextToSize(bulletText, CONTENT_WIDTH - 4);
-          doc.text(lines, PAGE_MARGIN + 2, y);
-          y += lines.length * 3.5 + 1.5;
-        }
-
-        if (remainingCount > 0) {
-          doc.setFontSize(8);
-          doc.setFont('helvetica', 'italic');
-          doc.setTextColor(100);
-          doc.text(
-            `...and ${remainingCount} more item${remainingCount === 1 ? '' : 's'} meeting basic standards.`,
-            PAGE_MARGIN + 6,
-            y,
-          );
-          y += 4;
-        }
-        y += 4;
-      }
+      y =
+        (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable
+          .finalY + 3;
 
       hasPriorSection = true;
     }
@@ -886,14 +850,6 @@ function renderRecommendationItem(
   doc.setFontSize(6);
   doc.setTextColor(WHITE);
   doc.text(rec.priority.toUpperCase(), badgeX + 8, y + 2, { align: 'center' });
-
-  // Timeline
-  if (rec.timeline) {
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(120);
-    doc.text(rec.timeline, badgeX + 20, y + 2);
-  }
 
   // Description
   doc.setFontSize(9);

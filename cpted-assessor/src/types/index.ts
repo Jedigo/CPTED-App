@@ -78,7 +78,6 @@ export interface Recommendation {
   order: number
   description: string
   priority: Priority
-  timeline: string
   type: RecommendationType
 }
 

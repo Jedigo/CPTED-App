@@ -47,7 +47,6 @@ export default function RecommendationEditor({
       order: items.length + 1,
       description: '',
       priority: 'medium',
-      timeline: '',
       type,
     };
     onChange([...items, newItem]);
@@ -156,21 +155,6 @@ export default function RecommendationEditor({
                   {opt.label}
                 </button>
               ))}
-            </div>
-
-            <div className="flex items-center gap-2 ml-auto">
-              <span className="text-xs font-bold text-navy/50 uppercase tracking-wide">
-                Timeline
-              </span>
-              <input
-                type="text"
-                value={item.timeline}
-                onChange={(e) =>
-                  handleUpdate(index, { timeline: e.target.value })
-                }
-                placeholder="e.g. Immediate, 1-3 months"
-                className="w-48 rounded-lg border border-navy/20 px-3 h-11 text-sm bg-white outline-none focus:border-blue-medium focus:ring-2 focus:ring-blue-medium/30"
-              />
             </div>
           </div>
         </div>

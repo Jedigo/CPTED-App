@@ -47,9 +47,8 @@ router.post(
       const filePath = path.join(dir, filename);
       await fs.writeFile(filePath, req.file.buffer);
 
-      // Insert DB record
-      await db.insert(photos).values({
-        id: photoId,
+      // Upsert DB record (handles re-uploads of previously failed photos)
+      const photoData = {
         assessment_id: assessmentId,
         item_score_id: req.body.item_score_id || null,
         zone_key: req.body.zone_key || '',
@@ -66,7 +65,18 @@ router.post(
           ? JSON.parse(req.body.annotation_data)
           : null,
         synced: true,
-      });
+      };
+
+      const [existing] = await db
+        .select({ id: photos.id })
+        .from(photos)
+        .where(eq(photos.id, photoId));
+
+      if (existing) {
+        await db.update(photos).set(photoData).where(eq(photos.id, photoId));
+      } else {
+        await db.insert(photos).values({ id: photoId, ...photoData });
+      }
 
       res.status(201).json({ id: photoId, filename, uploaded: true });
     } catch (err) {

@@ -131,7 +131,7 @@ db.version(1).stores({
 });
 ```
 
-## Assessment Zones (7 total, 141 checklist items)
+## Assessment Zones (7 total, 63 checklist items)
 
 | # | Zone Key | Zone Name | Principles |
 |---|----------|-----------|------------|
@@ -140,10 +140,10 @@ db.version(1).stores({
 | 3 | `side_yards` | Side Yards & Pathways | Natural Surveillance, Access Control, Territorial Reinforcement, Maintenance & Image |
 | 4 | `rear_yard` | Rear Yard & Back Entry | Natural Surveillance, Access Control, Territorial Reinforcement, Maintenance & Image |
 | 5 | `garage_driveway` | Garage & Driveway | Natural Surveillance, Access Control, Territorial Reinforcement, Maintenance & Image |
-| 6 | `exterior_lighting` | Exterior Lighting | Natural Surveillance (Lighting Quality), Lighting Controls & Technology, Fixture Types & Glare Assessment, Maintenance & Image |
+| 6 | `exterior_lighting` | Exterior Lighting | Lighting Coverage, Maintenance & Image |
 | 7 | `windows_interior` | Windows & Interior Considerations | Natural Surveillance, Access Control, Security Systems & Technology, Behavioral & Routine Considerations |
 
-The full checklist item text lives in `src/data/zones.ts` and must match the CPTED_Residential_Assessment_Checklist.docx exactly.
+The full checklist item text lives in `src/data/zones.ts`. Trimmed from 141 to 63 items in v0.8.0 to match typical PD assessment length (30-75 items).
 
 ## Scoring System
 
@@ -174,6 +174,7 @@ The full checklist item text lives in `src/data/zones.ts` and must match the CPT
 7. `property_type` only implements `single_family_residential` for now — design UI to be expandable
 8. Timestamps: **local time for display**, stored as **ISO 8601 UTC** internally
 9. Photo capture should auto-grab **GPS coordinates and timestamp** from device
+10. **Version bumps are required** on every commit that changes app functionality. Bump the semver version in both `cpted-assessor/package.json` and the version display in `cpted-assessor/src/pages/Home.tsx`. Use patch for fixes, minor for features, major for breaking changes.
 
 ## Liability Waiver (Verbatim — Do Not Modify)
 
@@ -223,6 +224,18 @@ npm run type-check    # TypeScript type checking
 
 - `files(1)/CPTED_App_Project_Plan.md` — Full project plan with complete zone data, API endpoints, Docker config
 - `files(1)/CPTED_Residential_Assessment_Checklist.docx` — Original checklist document (PDF report must match this format)
+
+## Future Features (Planned)
+
+### Auto-Recommend CPTED Fencing
+When rear yard (Zone 4) items related to fencing, visibility, or access control are scored N/A, 1, or 2, the report should automatically recommend a CPTED-approved fence style. Should account for HOA restrictions if noted by the assessor. Fence recommendations should include style guidance (e.g., semi-open designs that balance privacy with natural surveillance).
+
+### Auto-Explain Deficient Findings in Report
+For any checklist item scored 1 (Critical) or 2 (Deficient), the PDF report should automatically include:
+- **What the standard is** — the CPTED best practice for that item
+- **What can be done to improve it** — specific, actionable steps the homeowner can take
+
+This requires building a knowledge base mapping each of the 64 checklist items to its corresponding standard explanation and improvement recommendations — essentially a mini CPTED reference guide embedded in the app.
 
 ## Current Status
 
