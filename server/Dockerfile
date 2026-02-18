@@ -6,9 +6,10 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-# Copy compiled source and migrations
+# Copy compiled source, migrations, and assets
 COPY dist/ ./dist/
 COPY drizzle/ ./drizzle/
+COPY assets/ ./assets/
 
 # Create photo storage directory
 RUN mkdir -p /data/photos

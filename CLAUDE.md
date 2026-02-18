@@ -242,10 +242,11 @@ This requires building a knowledge base mapping each of the 64 checklist items t
 
 ## Current Status
 
-**v0.10.0 deployed.** Dark mode for night assessments. Auto-explain deficient findings and auto-fence recommendation features. Checklist trimmed to 64 items. Phase 2 backend live. PDF report polished. Photo storage uses base64 data URLs (Safari fix). Redeploy with `./deploy.sh`.
+**v0.10.0 deployed.** Dark mode for night assessments. Auto-explain deficient findings and auto-fence recommendation features. Checklist trimmed to 63 items. Phase 2 backend live. PDF report polished with Volusia Sheriff badge logo on cover page. Photo storage uses base64 data URLs (Safari fix). All known bugs fixed. Redeploy with `./deploy.sh`.
 
 **Remaining items:**
-- (none currently)
+- Voice notes feature (planned)
+- Server-side report storage (planned)
 
 Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch: `main`)
 
@@ -292,3 +293,15 @@ Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch:
 - Created `ThemeContext.tsx`, `ThemeToggle.tsx`; replaced `bg-white`→`bg-surface`, `text-navy`→`text-ink`, `border-navy/`→`border-ink/` across 18 files
 - Headers, sidebar, score colors, and full-navy buttons unchanged — already dark
 - Deployed to server, pushed to GitHub
+
+### 2026-02-18 — PDF Logo, Deploy Fixes, Bug Fix
+- Added Volusia Sheriff badge logo to PDF cover page header (left side of navy bar) in both client and server PDF services
+- Text logo (`volusia_sheriff_text_transparent.png`) tested but removed — rendered poorly in jsPDF
+- Logos stored in: `logos/` (source), `cpted-assessor/public/logos/` (client fetch), `server/assets/logos/` (server fs.readFile)
+- Updated `server/Dockerfile` to `COPY assets/ ./assets/` so server-side PDF can access logos in Docker
+- Fixed SSH deploy: added host key for IP `100.91.180.116` to known_hosts (deploy.sh uses IP, not hostname)
+- Fixed SSH auth: server `~/.ssh/authorized_keys` permissions needed `chmod 600`
+- Deploy target confirmed: SSH user is `cpted` (not `cigo`), remote dir `/home/cpted/cpted-app/`
+- **Fixed clear signature bug**: `handleClear` in `SignaturePad.tsx` returned early when canvas ref was null (canvas not in DOM when showing saved signature image), preventing `setSigned(false)` and `onChange(null)` from firing
+- Updated memory files and todo list — all known bugs resolved
+- Next: voice notes feature, server-side report storage

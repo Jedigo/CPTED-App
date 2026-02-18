@@ -99,17 +99,18 @@ export default function SignaturePad({ value, onChange }: SignaturePadProps) {
 
   const handleClear = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const dpr = window.devicePixelRatio || 1;
-    ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        const dpr = window.devicePixelRatio || 1;
+        ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+      }
+    }
     hasStrokesRef.current = false;
     initializedRef.current = false;
-    initCanvas();
     setSigned(false);
     onChange(null);
-  }, [onChange, initCanvas]);
+  }, [onChange]);
 
   if (value && signed && !drawingRef.current) {
     return (

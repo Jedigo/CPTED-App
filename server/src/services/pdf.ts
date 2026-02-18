@@ -30,6 +30,19 @@ interface PDFData {
   itemScores: ItemScoreRow[];
   photos: PhotoRow[];
   photoBase64Map: Map<string, string>;
+  badgeLogo: string | null;
+}
+
+// --- Logo loading (reads from server/assets/) ---
+async function loadLogoBase64(filename: string): Promise<string | null> {
+  try {
+    // Resolve relative to this file's location: ../assets/logos/
+    const logoPath = new URL(`../../assets/logos/${filename}`, import.meta.url);
+    const buffer = await fs.readFile(logoPath);
+    return `data:image/png;base64,${buffer.toString('base64')}`;
+  } catch {
+    return null;
+  }
 }
 
 interface Recommendation {
@@ -130,12 +143,16 @@ async function gatherAssessmentData(assessmentId: string): Promise<PDFData> {
     }
   }
 
+  // Load logo
+  const badgeLogo = await loadLogoBase64('volusia_sheriff_badge_transparent.png');
+
   return {
     assessment,
     zoneScores: zones,
     itemScores: items,
     photos: photoRows,
     photoBase64Map,
+    badgeLogo,
   };
 }
 
@@ -172,6 +189,14 @@ function renderCoverPage(doc: jsPDF, data: PDFData): void {
   doc.setFillColor(NAVY);
   doc.rect(0, 0, PAGE_WIDTH, 60, 'F');
 
+  // Badge logo on the left
+  if (data.badgeLogo) {
+    try {
+      doc.addImage(data.badgeLogo, 'PNG', PAGE_MARGIN - 2, 6, 22, 22);
+    } catch { /* skip if logo fails */ }
+  }
+
+  // Title text
   doc.setTextColor(WHITE);
   doc.setFontSize(22);
   doc.setFont('helvetica', 'bold');

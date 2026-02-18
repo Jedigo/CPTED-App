@@ -73,16 +73,33 @@ function formatDate(isoString: string): string {
   });
 }
 
+// --- Logo loading (fetches from public/ at PDF generation time) ---
+async function loadLogoBase64(url: string): Promise<string | null> {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
 // --- Data gathering ---
 interface PDFData {
   assessment: Assessment;
   zoneScores: ZoneScore[];
   itemScores: ItemScore[];
   photos: Photo[];
+  badgeLogo: string | null;
 }
 
 async function gatherAssessmentData(assessmentId: string): Promise<PDFData> {
-  const [assessment, zoneScores, itemScores, photos] = await Promise.all([
+  const [assessment, zoneScores, itemScores, photos, badgeLogo] = await Promise.all([
     db.assessments.get(assessmentId),
     db.zone_scores
       .where('assessment_id')
@@ -90,11 +107,12 @@ async function gatherAssessmentData(assessmentId: string): Promise<PDFData> {
       .sortBy('zone_order'),
     db.item_scores.where('assessment_id').equals(assessmentId).toArray(),
     db.photos.where('assessment_id').equals(assessmentId).toArray(),
+    loadLogoBase64('/logos/volusia_sheriff_badge_transparent.png'),
   ]);
 
   if (!assessment) throw new Error('Assessment not found');
 
-  return { assessment, zoneScores, itemScores, photos };
+  return { assessment, zoneScores, itemScores, photos, badgeLogo };
 }
 
 // --- Page helpers ---
@@ -133,6 +151,13 @@ function renderCoverPage(doc: jsPDF, data: PDFData): void {
   // Navy header bar
   doc.setFillColor(NAVY);
   doc.rect(0, 0, PAGE_WIDTH, 60, 'F');
+
+  // Badge logo on the left
+  if (data.badgeLogo) {
+    try {
+      doc.addImage(data.badgeLogo, 'PNG', PAGE_MARGIN - 2, 6, 22, 22);
+    } catch { /* skip if logo fails */ }
+  }
 
   // Title text
   doc.setTextColor(WHITE);
