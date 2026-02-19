@@ -504,8 +504,8 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
 
       for (const item of sortedConcerns) {
         const guidance = ITEM_GUIDANCE.get(item.item_text);
-        // Estimate height: item row ~14, notes ~8, guidance ~24
-        const estimatedHeight = 14 + (item.notes ? 8 : 0) + (guidance ? 28 : 0);
+        // Estimate height: item row ~14, notes ~14, guidance ~24
+        const estimatedHeight = 14 + (item.notes?.trim() ? 14 : 0) + (guidance ? 28 : 0);
         y = ensureSpace(doc, estimatedHeight, y);
 
         // Item row — light red background
@@ -533,14 +533,35 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
 
         y += itemRowHeight + 1;
 
-        // Assessor notes (if present)
+        // Assessor notes (if present) — styled as a visible callout
         if (item.notes.trim()) {
+          const noteContent = item.notes.trim();
+          doc.setFontSize(8);
+          const noteLines = doc.splitTextToSize(noteContent, CONTENT_WIDTH - 18);
+          const noteBlockHeight = noteLines.length * 3.5 + 6;
+          y = ensureSpace(doc, noteBlockHeight, y);
+
+          // Note background
+          doc.setFillColor('#FEF3C7'); // amber-100
+          doc.roundedRect(PAGE_MARGIN + 3, y, CONTENT_WIDTH - 6, noteBlockHeight, 1, 1, 'F');
+
+          // Left accent bar
+          doc.setFillColor('#D97706'); // amber-600
+          doc.rect(PAGE_MARGIN + 3, y, 1.5, noteBlockHeight, 'F');
+
+          // "Assessor Note" label
           doc.setFontSize(7);
-          doc.setFont('helvetica', 'italic');
-          doc.setTextColor(100);
-          const noteLines = doc.splitTextToSize(`Assessor: ${item.notes.trim()}`, CONTENT_WIDTH - 8);
-          doc.text(noteLines, PAGE_MARGIN + 5, y + 2);
-          y += noteLines.length * 3 + 3;
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor('#92400E'); // amber-800
+          doc.text('Assessor Note:', PAGE_MARGIN + 8, y + 4);
+
+          // Note text
+          doc.setFontSize(8);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor('#78350F'); // amber-900
+          doc.text(noteLines, PAGE_MARGIN + 8, y + 4 + 3.5);
+
+          y += noteBlockHeight + 2;
         }
 
         // CPTED Guidance block (if found)
