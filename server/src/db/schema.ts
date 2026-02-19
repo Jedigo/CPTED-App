@@ -32,6 +32,7 @@ export const assessments = pgTable('assessments', {
   top_recommendations: jsonb('top_recommendations').notNull().default([]),
   quick_wins: jsonb('quick_wins').notNull().default([]),
   notes: text('notes').notNull().default(''),
+  assessor_signature: text('assessor_signature'),
   synced_at: timestamp('synced_at', { withTimezone: true }),
 });
 

@@ -130,9 +130,13 @@ async function gatherAssessmentData(assessmentId: string): Promise<PDFData> {
   // Sort zones by zone_order
   zones.sort((a, b) => a.zone_order - b.zone_order);
 
+  // Only include photos still referenced by an item_score's photo_ids
+  const referencedIds = new Set(items.flatMap((s) => (s.photo_ids as string[]) || []));
+  const validPhotos = photoRows.filter((p) => referencedIds.has(p.id));
+
   // Convert photo files to base64 for embedding
   const photoBase64Map = new Map<string, string>();
-  for (const photo of photoRows) {
+  for (const photo of validPhotos) {
     try {
       const fileBuffer = await fs.readFile(photo.blob_path);
       const base64 = fileBuffer.toString('base64');
@@ -150,7 +154,7 @@ async function gatherAssessmentData(assessmentId: string): Promise<PDFData> {
     assessment,
     zoneScores: zones,
     itemScores: items,
-    photos: photoRows,
+    photos: validPhotos,
     photoBase64Map,
     badgeLogo,
   };
@@ -470,6 +474,39 @@ const ZONE_RESIDENT_DESCRIPTIONS: Record<string, string> = {
     "This section covers window security, interior visibility considerations, security systems, and daily routines that affect your home's overall safety profile.",
 };
 
+// Render inline photos for a specific item (2 per row, compact) — server version
+function renderItemPhotosServer(doc: jsPDF, itemId: string, data: PDFData, y: number): number {
+  const itemPhotos = data.photos.filter((p) => p.item_score_id === itemId);
+  const hasAny = itemPhotos.some((p) => data.photoBase64Map.has(p.id));
+  if (!hasAny) return y;
+
+  const photoWidth = (CONTENT_WIDTH - 10) / 2;
+  const photoHeight = photoWidth * 0.65;
+  let col = 0;
+
+  for (const photo of itemPhotos) {
+    const b64 = data.photoBase64Map.get(photo.id);
+    if (!b64) continue;
+
+    y = ensureSpace(doc, photoHeight + 5, y);
+    const x = PAGE_MARGIN + 3 + col * (photoWidth + 4);
+    try {
+      doc.addImage(b64, 'JPEG', x, y, photoWidth, photoHeight);
+    } catch {
+      // Skip photos that fail to render
+    }
+    col++;
+    if (col >= 2) {
+      col = 0;
+      y += photoHeight + 3;
+    }
+  }
+  if (col > 0) {
+    y += photoHeight + 3;
+  }
+  return y;
+}
+
 function renderZoneDetails(doc: jsPDF, data: PDFData): void {
   for (const zone of ZONES) {
     doc.addPage();
@@ -537,8 +574,7 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
 
       for (const item of sortedConcerns) {
         const guidance = ITEM_GUIDANCE.get(item.item_text);
-        // Estimate height: item row ~14, notes ~8, guidance ~24
-        const estimatedHeight = 14 + (item.notes ? 8 : 0) + (guidance ? 28 : 0);
+        const estimatedHeight = 14 + (item.notes?.trim() ? 14 : 0) + (guidance ? 28 : 0);
         y = ensureSpace(doc, estimatedHeight, y);
 
         // Item row — light red background
@@ -547,13 +583,11 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
         const itemRowHeight = Math.max(itemLines.length * 3.5 + 4, 10);
         doc.roundedRect(PAGE_MARGIN, y, CONTENT_WIDTH, itemRowHeight, 1, 1, 'F');
 
-        // Item text
         doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(50);
         doc.text(itemLines, PAGE_MARGIN + 3, y + 4);
 
-        // Rating badge on right
         const ratingLabel = getScoreLabel(item.score!);
         const badgeWidth = 20;
         const badgeX = PAGE_WIDTH - PAGE_MARGIN - badgeWidth - 2;
@@ -566,34 +600,46 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
 
         y += itemRowHeight + 1;
 
-        // Assessor notes (if present)
+        // Assessor notes callout
         if (item.notes.trim()) {
+          const noteContent = item.notes.trim();
+          doc.setFontSize(8);
+          const noteLines = doc.splitTextToSize(noteContent, CONTENT_WIDTH - 18);
+          const noteBlockHeight = noteLines.length * 3.5 + 6;
+          y = ensureSpace(doc, noteBlockHeight, y);
+
+          doc.setFillColor('#FEF3C7');
+          doc.roundedRect(PAGE_MARGIN + 3, y, CONTENT_WIDTH - 6, noteBlockHeight, 1, 1, 'F');
+          doc.setFillColor('#D97706');
+          doc.rect(PAGE_MARGIN + 3, y, 1.5, noteBlockHeight, 'F');
+
           doc.setFontSize(7);
-          doc.setFont('helvetica', 'italic');
-          doc.setTextColor(100);
-          const noteLines = doc.splitTextToSize(`Assessor: ${item.notes.trim()}`, CONTENT_WIDTH - 8);
-          doc.text(noteLines, PAGE_MARGIN + 5, y + 2);
-          y += noteLines.length * 3 + 3;
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor('#92400E');
+          doc.text('Assessor Note:', PAGE_MARGIN + 8, y + 4);
+
+          doc.setFontSize(8);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor('#78350F');
+          doc.text(noteLines, PAGE_MARGIN + 8, y + 4 + 3.5);
+
+          y += noteBlockHeight + 2;
         }
 
-        // CPTED Guidance block (if found)
+        // CPTED Guidance block
         if (guidance) {
           doc.setFontSize(7);
           const standardLines = doc.splitTextToSize(guidance.standard, CONTENT_WIDTH - 16);
           const improvementLines = doc.splitTextToSize(guidance.improvement, CONTENT_WIDTH - 16);
-          // 4 top padding + label(3.5) + standard lines + 4 gap + label(3.5) + improvement lines + 4 bottom
           const guidanceHeight = 4 + 3.5 + standardLines.length * 3 + 4 + 3.5 + improvementLines.length * 3 + 4;
           y = ensureSpace(doc, guidanceHeight, y);
 
           doc.setFillColor('#FFF5F5');
           doc.roundedRect(PAGE_MARGIN + 3, y, CONTENT_WIDTH - 6, guidanceHeight, 1, 1, 'F');
-
-          // Accent bar on left
           doc.setFillColor('#DC2626');
           doc.rect(PAGE_MARGIN + 3, y, 1.5, guidanceHeight, 'F');
 
           let gy = y + 4;
-          // "CPTED Standard" label
           doc.setFontSize(7);
           doc.setFont('helvetica', 'bold');
           doc.setTextColor('#991B1B');
@@ -604,7 +650,6 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
           doc.text(standardLines, PAGE_MARGIN + 8, gy);
           gy += standardLines.length * 3 + 4;
 
-          // "How to Improve" label
           doc.setFont('helvetica', 'bold');
           doc.setTextColor('#991B1B');
           doc.text('How to Improve:', PAGE_MARGIN + 8, gy);
@@ -616,7 +661,10 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
           y += guidanceHeight + 3;
         }
 
-        y += 3; // Gap before next item
+        // Inline photos for this item
+        y = renderItemPhotosServer(doc, item.id, data, y);
+
+        y += 3;
       }
 
       hasPriorSection = true;
@@ -625,7 +673,6 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
     // --- Opportunities for Enhancement (score 3, only if assessor added notes) ---
     const improvementsWithNotes = improvements.filter((s) => s.notes.trim());
     if (improvementsWithNotes.length > 0) {
-      // Divider between sections
       if (hasPriorSection) {
         doc.setDrawColor(LIGHT_BLUE);
         doc.setLineWidth(0.3);
@@ -635,7 +682,6 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
 
       y = ensureSpace(doc, 20, y);
 
-      // Section header
       doc.setFillColor('#FEFCE8');
       doc.rect(PAGE_MARGIN, y, CONTENT_WIDTH, 8, 'F');
       doc.setFontSize(9);
@@ -654,37 +700,34 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
       );
       y += 5;
 
-      const noteRows = improvementsWithNotes.map((item) => [item.item_text, item.notes]);
+      for (const item of improvementsWithNotes) {
+        y = ensureSpace(doc, 14, y);
 
-      autoTable(doc, {
-        startY: y,
-        head: [['Observation', 'Assessor Notes']],
-        body: noteRows,
-        margin: { left: PAGE_MARGIN, right: PAGE_MARGIN },
-        theme: 'grid',
-        headStyles: {
-          fillColor: '#FEF9C3',
-          textColor: '#854D0E',
-          fontStyle: 'bold',
-          fontSize: 8,
-        },
-        bodyStyles: { fontSize: 8, textColor: [50, 50, 50], cellPadding: 2.5 },
-        columnStyles: {
-          0: { cellWidth: 'auto' },
-          1: { cellWidth: 45, fontSize: 7 },
-        },
-      });
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(50);
+        const itemLines = doc.splitTextToSize(`\u2022  ${item.item_text}`, CONTENT_WIDTH - 4);
+        doc.text(itemLines, PAGE_MARGIN + 2, y);
+        y += itemLines.length * 3.5 + 1;
 
-      y =
-        (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable
-          .finalY + 3;
+        if (item.notes.trim()) {
+          doc.setFontSize(7);
+          doc.setFont('helvetica', 'italic');
+          doc.setTextColor('#854D0E');
+          const noteLines = doc.splitTextToSize(`Note: ${item.notes.trim()}`, CONTENT_WIDTH - 12);
+          doc.text(noteLines, PAGE_MARGIN + 6, y);
+          y += noteLines.length * 3 + 2;
+        }
+
+        y = renderItemPhotosServer(doc, item.id, data, y);
+        y += 2;
+      }
 
       hasPriorSection = true;
     }
 
     // --- Positive Observations (scores 4-5) ---
     if (strengths.length > 0) {
-      // Divider between sections
       if (hasPriorSection) {
         doc.setDrawColor(LIGHT_BLUE);
         doc.setLineWidth(0.3);
@@ -705,7 +748,6 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
       );
       y += 10;
 
-      // Intro sentence
       doc.setFontSize(8);
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(80);
@@ -716,7 +758,6 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
       );
       y += 5;
 
-      // Group Excellent (5) first, then Good (4)
       const excellent = strengths.filter((s) => s.score === 5);
       const good = strengths.filter((s) => s.score === 4);
 
@@ -726,7 +767,6 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
       ]) {
         if (group.items.length === 0) continue;
 
-        // Sub-label
         doc.setFontSize(7);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(getScoreColorHex(group.score));
@@ -744,7 +784,6 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
           doc.text(lines, PAGE_MARGIN + 2, y);
           y += lines.length * 3.5 + 1;
 
-          // Show assessor notes inline if present
           if (item.notes.trim()) {
             doc.setFontSize(7);
             doc.setFont('helvetica', 'italic');
@@ -756,8 +795,40 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(60);
           }
+
         }
         y += 2;
+      }
+
+      // Grouped photos for all positive items at the end of the section
+      const strengthPhotoIds = strengths.flatMap((item) =>
+        data.photos.filter((p) => p.item_score_id === item.id && data.photoBase64Map.has(p.id)),
+      );
+      if (strengthPhotoIds.length > 0) {
+        y += 2;
+        const photoWidth = (CONTENT_WIDTH - 10) / 2;
+        const photoHeight = photoWidth * 0.65;
+        let col = 0;
+
+        for (const photo of strengthPhotoIds) {
+          const b64 = data.photoBase64Map.get(photo.id);
+          if (!b64) continue;
+          y = ensureSpace(doc, photoHeight + 5, y);
+          const x = PAGE_MARGIN + 3 + col * (photoWidth + 4);
+          try {
+            doc.addImage(b64, 'JPEG', x, y, photoWidth, photoHeight);
+          } catch {
+            // Skip photos that fail to render
+          }
+          col++;
+          if (col >= 2) {
+            col = 0;
+            y += photoHeight + 3;
+          }
+        }
+        if (col > 0) {
+          y += photoHeight + 3;
+        }
       }
     }
 
@@ -782,66 +853,6 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
         y,
       );
       y += 6;
-    }
-
-    // Photos for this zone (2 per row, item text captions)
-    const zonePhotos = data.photos.filter((p) => p.zone_key === zone.key);
-    if (zonePhotos.length > 0) {
-      y = ensureSpace(doc, 65, y);
-
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(NAVY);
-      doc.text('Photos', PAGE_MARGIN, y);
-      y += 5;
-
-      const photoWidth = (CONTENT_WIDTH - 5) / 2; // 2 per row with gap
-      let col = 0;
-
-      for (const photo of zonePhotos) {
-        const b64 = data.photoBase64Map.get(photo.id);
-        if (!b64) continue;
-
-        y = ensureSpace(doc, 60, y);
-
-        const x = PAGE_MARGIN + col * (photoWidth + 5);
-        try {
-          doc.addImage(b64, 'JPEG', x, y, photoWidth, photoWidth * 0.75);
-
-          // Brief caption: score label + short item description
-          doc.setFontSize(6);
-          doc.setFont('helvetica', 'normal');
-          doc.setTextColor(100);
-
-          if (photo.item_score_id) {
-            const itemScore = data.itemScores.find(
-              (is) => is.id === photo.item_score_id,
-            );
-            if (itemScore) {
-              const label = itemScore.score !== null && !itemScore.is_na
-                ? `${getScoreLabel(itemScore.score)} \u2014 `
-                : '';
-              const brief = itemScore.item_text.length > 70
-                ? itemScore.item_text.substring(0, 67) + '...'
-                : itemScore.item_text;
-              const captionLines = doc.splitTextToSize(label + brief, photoWidth);
-              doc.text(captionLines, x, y + photoWidth * 0.75 + 3);
-            }
-          }
-        } catch {
-          // Skip photos that fail to render
-        }
-
-        col++;
-        if (col >= 2) {
-          col = 0;
-          y += photoWidth * 0.75 + 10;
-        }
-      }
-
-      if (col > 0) {
-        y += photoWidth * 0.75 + 10;
-      }
     }
 
     addPageFooter(doc, doc.getNumberOfPages());
@@ -1005,7 +1016,7 @@ function renderLiabilityWaiver(doc: jsPDF, data: PDFData): void {
   doc.setLineWidth(0.3);
 
   // Render signature image above the line
-  const sig = (data.assessment as Record<string, unknown>).assessor_signature as string | null;
+  const sig = data.assessment.assessor_signature;
   if (sig) {
     try {
       doc.addImage(sig, 'PNG', leftSig, y - 18, 55, 15);

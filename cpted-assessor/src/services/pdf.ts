@@ -112,7 +112,11 @@ async function gatherAssessmentData(assessmentId: string): Promise<PDFData> {
 
   if (!assessment) throw new Error('Assessment not found');
 
-  return { assessment, zoneScores, itemScores, photos, badgeLogo };
+  // Only include photos still referenced by an item_score's photo_ids
+  const referencedIds = new Set(itemScores.flatMap((s) => s.photo_ids));
+  const validPhotos = photos.filter((p) => referencedIds.has(p.id));
+
+  return { assessment, zoneScores, itemScores, photos: validPhotos, badgeLogo };
 }
 
 // --- Page helpers ---
@@ -437,6 +441,36 @@ const ZONE_RESIDENT_DESCRIPTIONS: Record<string, string> = {
     'This section covers window security, interior visibility considerations, security systems, and daily routines that affect your home\'s overall safety profile.',
 };
 
+// Render inline photos for a specific item (2 per row, compact)
+function renderItemPhotos(doc: jsPDF, item: ItemScore, data: PDFData, y: number): number {
+  const itemPhotos = data.photos.filter((p) => p.item_score_id === item.id && p.data);
+  if (itemPhotos.length === 0) return y;
+
+  const photoWidth = (CONTENT_WIDTH - 10) / 2; // 2 per row with gap
+  const photoHeight = photoWidth * 0.65; // slightly shorter aspect ratio for inline
+  let col = 0;
+
+  for (const photo of itemPhotos) {
+    y = ensureSpace(doc, photoHeight + 5, y);
+    const x = PAGE_MARGIN + 3 + col * (photoWidth + 4);
+    try {
+      doc.addImage(photo.data, 'JPEG', x, y, photoWidth, photoHeight);
+    } catch {
+      // Skip photos that fail to render
+    }
+    col++;
+    if (col >= 2) {
+      col = 0;
+      y += photoHeight + 3;
+    }
+  }
+  // Advance past last partial row
+  if (col > 0) {
+    y += photoHeight + 3;
+  }
+  return y;
+}
+
 function renderZoneDetails(doc: jsPDF, data: PDFData): void {
   for (const zone of ZONES) {
     doc.addPage();
@@ -604,6 +638,9 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
           y += guidanceHeight + 3;
         }
 
+        // Inline photos for this item
+        y = renderItemPhotos(doc, item, data, y);
+
         y += 3; // Gap before next item
       }
 
@@ -642,33 +679,32 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
       );
       y += 5;
 
-      const noteRows = improvementsWithNotes.map((item) => [
-        item.item_text,
-        item.notes,
-      ]);
+      for (const item of improvementsWithNotes) {
+        y = ensureSpace(doc, 14, y);
 
-      autoTable(doc, {
-        startY: y,
-        head: [['Observation', 'Assessor Notes']],
-        body: noteRows,
-        margin: { left: PAGE_MARGIN, right: PAGE_MARGIN },
-        theme: 'grid',
-        headStyles: {
-          fillColor: '#FEF9C3',
-          textColor: '#854D0E',
-          fontStyle: 'bold',
-          fontSize: 8,
-        },
-        bodyStyles: { fontSize: 8, textColor: [50, 50, 50], cellPadding: 2.5 },
-        columnStyles: {
-          0: { cellWidth: 'auto' },
-          1: { cellWidth: 45, fontSize: 7 },
-        },
-      });
+        // Item text
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(50);
+        const itemLines = doc.splitTextToSize(`\u2022  ${item.item_text}`, CONTENT_WIDTH - 4);
+        doc.text(itemLines, PAGE_MARGIN + 2, y);
+        y += itemLines.length * 3.5 + 1;
 
-      y =
-        (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable
-          .finalY + 3;
+        // Assessor note
+        if (item.notes.trim()) {
+          doc.setFontSize(7);
+          doc.setFont('helvetica', 'italic');
+          doc.setTextColor('#854D0E');
+          const noteLines = doc.splitTextToSize(`Note: ${item.notes.trim()}`, CONTENT_WIDTH - 12);
+          doc.text(noteLines, PAGE_MARGIN + 6, y);
+          y += noteLines.length * 3 + 2;
+        }
+
+        // Inline photos for this item
+        y = renderItemPhotos(doc, item, data, y);
+
+        y += 2;
+      }
 
       hasPriorSection = true;
     }
@@ -750,6 +786,35 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
         }
         y += 2;
       }
+
+      // Grouped photos for all positive items at the end of the section
+      const strengthPhotos = strengths.flatMap((item) =>
+        data.photos.filter((p) => p.item_score_id === item.id && p.data),
+      );
+      if (strengthPhotos.length > 0) {
+        y += 2;
+        const photoWidth = (CONTENT_WIDTH - 10) / 2;
+        const photoHeight = photoWidth * 0.65;
+        let col = 0;
+
+        for (const photo of strengthPhotos) {
+          y = ensureSpace(doc, photoHeight + 5, y);
+          const x = PAGE_MARGIN + 3 + col * (photoWidth + 4);
+          try {
+            doc.addImage(photo.data, 'JPEG', x, y, photoWidth, photoHeight);
+          } catch {
+            // Skip photos that fail to render
+          }
+          col++;
+          if (col >= 2) {
+            col = 0;
+            y += photoHeight + 3;
+          }
+        }
+        if (col > 0) {
+          y += photoHeight + 3;
+        }
+      }
     }
 
     // Summary line if nothing notable
@@ -769,67 +834,6 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
         y,
       );
       y += 6;
-    }
-
-    // Photos for this zone (2 per row, item text captions)
-    const zonePhotos = data.photos.filter((p) => p.zone_key === zone.key);
-    if (zonePhotos.length > 0) {
-      y = ensureSpace(doc, 65, y);
-
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(NAVY);
-      doc.text('Photos', PAGE_MARGIN, y);
-      y += 5;
-
-      const photoWidth = (CONTENT_WIDTH - 5) / 2; // 2 per row with gap
-      let col = 0;
-
-      for (const photo of zonePhotos) {
-        const b64 = photo.data;
-        if (!b64) continue;
-
-        y = ensureSpace(doc, 60, y);
-
-        const x = PAGE_MARGIN + col * (photoWidth + 5);
-        try {
-          doc.addImage(b64, 'JPEG', x, y, photoWidth, photoWidth * 0.75);
-
-          // Brief caption: score label + short item description
-          doc.setFontSize(6);
-          doc.setFont('helvetica', 'normal');
-          doc.setTextColor(100);
-
-          if (photo.item_score_id) {
-            const itemScore = data.itemScores.find(
-              (is) => is.id === photo.item_score_id,
-            );
-            if (itemScore) {
-              const label = itemScore.score !== null && !itemScore.is_na
-                ? `${getScoreLabel(itemScore.score)} \u2014 `
-                : '';
-              const brief = itemScore.item_text.length > 70
-                ? itemScore.item_text.substring(0, 67) + '...'
-                : itemScore.item_text;
-              const captionLines = doc.splitTextToSize(label + brief, photoWidth);
-              doc.text(captionLines, x, y + photoWidth * 0.75 + 3);
-            }
-          }
-        } catch {
-          // Skip photos that fail to render
-        }
-
-        col++;
-        if (col >= 2) {
-          col = 0;
-          y += photoWidth * 0.75 + 10;
-        }
-      }
-
-      // If last row wasn't full, advance y
-      if (col > 0) {
-        y += photoWidth * 0.75 + 10;
-      }
     }
 
     addPageFooter(doc, doc.getNumberOfPages());

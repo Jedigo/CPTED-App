@@ -40,6 +40,7 @@ router.post('/sync', async (req, res, next) => {
         top_recommendations: payload.assessment.top_recommendations || [],
         quick_wins: payload.assessment.quick_wins || [],
         notes: payload.assessment.notes || '',
+        assessor_signature: payload.assessment.assessor_signature || null,
         synced_at: now,
       };
 
