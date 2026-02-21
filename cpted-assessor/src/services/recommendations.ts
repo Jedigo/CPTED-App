@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { ItemScore, Recommendation } from '../types';
 import { ZONES } from '../data/zones';
+import { ITEM_GUIDANCE } from '../data/item-guidance';
 
 // Principles where fixes tend to be low-cost / quick to implement
 const QUICK_WIN_PRINCIPLES = new Set([
@@ -38,6 +39,15 @@ function getItemContext(items: ItemScore[]): ScoredItemContext[] {
   return results;
 }
 
+function buildDescription(context: ScoredItemContext): string {
+  const heading = `${context.zoneName} — ${context.principleName}: ${context.item.item_text}`;
+  const guidance = ITEM_GUIDANCE.get(context.item.item_text);
+  if (guidance) {
+    return `${heading}\n\nRecommended action: ${guidance.improvement}`;
+  }
+  return heading;
+}
+
 function getPriority(score: number): 'high' | 'medium' | 'low' {
   if (score <= 1) return 'high';
   if (score <= 2) return 'medium';
@@ -68,7 +78,7 @@ export function generateRecommendations(
     id: uuidv4(),
     assessment_id: assessmentId,
     order: idx + 1,
-    description: `${c.zoneName} — ${c.principleName}: ${c.item.item_text}`,
+    description: buildDescription(c),
     priority: getPriority(c.item.score!),
     type: 'recommendation' as const,
   }));
@@ -177,7 +187,7 @@ export function generateQuickWins(
     id: uuidv4(),
     assessment_id: assessmentId,
     order: idx + 1,
-    description: `${c.zoneName} — ${c.principleName}: ${c.item.item_text}`,
+    description: buildDescription(c),
     priority: c.item.score! <= 2 ? 'medium' as const : 'low' as const,
     type: 'quick_win' as const,
   }));

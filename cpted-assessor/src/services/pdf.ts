@@ -898,9 +898,13 @@ function renderRecommendations(doc: jsPDF, data: PDFData): void {
     doc.text('No quick wins have been added for this assessment.', PAGE_MARGIN, y);
   } else {
     for (const item of qw) {
-      y = ensureSpace(doc, 15, y);
-      renderQuickWinItem(doc, item, y);
-      y += 12;
+      // Pre-calculate height for ensureSpace
+      doc.setFontSize(9);
+      const preCalcLines = doc.splitTextToSize(item.description, CONTENT_WIDTH - 30);
+      const itemHeight = preCalcLines.length * 4 + 6;
+      y = ensureSpace(doc, itemHeight, y);
+      const actualHeight = renderQuickWinItem(doc, item, y);
+      y += actualHeight;
     }
   }
 
@@ -946,7 +950,7 @@ function renderRecommendationItem(
   return 8 + descLines.length * 4 + 4;
 }
 
-function renderQuickWinItem(doc: jsPDF, item: Recommendation, y: number): void {
+function renderQuickWinItem(doc: jsPDF, item: Recommendation, y: number): number {
   // Bullet
   doc.setFillColor(MEDIUM_BLUE);
   doc.circle(PAGE_MARGIN + 3, y + 2, 1.5, 'F');
@@ -963,6 +967,9 @@ function renderQuickWinItem(doc: jsPDF, item: Recommendation, y: number): void {
   doc.setTextColor(50);
   const descLines = doc.splitTextToSize(item.description, CONTENT_WIDTH - 30);
   doc.text(descLines, PAGE_MARGIN + 28, y + 3);
+
+  // Return total height: text lines + padding
+  return descLines.length * 4 + 4;
 }
 
 const LIABILITY_WAIVER = `This CPTED assessment is provided solely for informational and preventative purposes. The observations and recommendations included in this report are offered as voluntary guidance and do not constitute mandated safety requirements, building code standards, or legal directives. The implementation of any recommendations is entirely at the discretion of the property owner and should be undertaken only with appropriate professional consultation when necessary. The Volusia Sheriff's Office, its employees, agents, and representatives make no warranties, guarantees, or assurances regarding the effectiveness of any recommended security measures. Crime prevention strategies reduce risk but cannot completely eliminate the possibility of criminal activity. By accepting this report, the property owner acknowledges that the Volusia Sheriff's Office shall not be held liable for any actions taken or not taken based on the information provided, nor for any damages, losses, or incidents that may occur on or near the property following this assessment.`;

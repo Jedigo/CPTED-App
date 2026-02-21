@@ -133,7 +133,7 @@ export default function RecommendationEditor({
                 ? 'Describe the recommendation...'
                 : 'Describe the quick win...'
             }
-            rows={2}
+            rows={4}
             className="w-full rounded-lg border border-ink/20 px-3 py-2 text-sm bg-surface outline-none focus:border-blue-medium focus:ring-2 focus:ring-blue-medium/30 resize-y"
           />
 

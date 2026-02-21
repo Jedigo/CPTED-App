@@ -242,26 +242,19 @@ This requires building a knowledge base mapping each of the 64 checklist items t
 
 ## Current Status
 
-**v0.10.0 deployed.** Dark mode for night assessments. Auto-explain deficient findings and auto-fence recommendation features. Checklist trimmed to 63 items. Phase 2 backend live. PDF report polished with Volusia Sheriff badge logo on cover page. Photo storage uses base64 data URLs (Safari fix). All known bugs fixed. Redeploy with `./deploy.sh`.
+**v0.11.1 deployed.** Dark mode for night assessments. Auto-explain deficient findings and auto-fence recommendation features. Checklist trimmed to 63 items. Phase 2 backend live. PDF report polished with Volusia Sheriff badge logo on cover page. Photo storage uses base64 data URLs (Safari fix). Auto-generated recommendations now include actionable fix text from ITEM_GUIDANCE. Redeploy with `./deploy.sh`.
 
-**Remaining items:**
+**Remaining items / To-Do:**
 - Voice notes feature (planned)
 - Server-side report storage (planned)
+- Item picker for manual recommendations/quick wins — select from scored items instead of typing freeform
+- Photo annotation — draw arrows/circles on captured photos to highlight issues
+- Replace PWA icon SVG placeholders with proper PNGs
+- Fix dark mode for disabled/N/A states (bg-gray-50 not dark-aware)
 
 Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch: `main`)
 
 ## Session Log
-
-### 2026-02-14 — Steps 10–12: MVP Complete + PDF Redesign
-- Step 10: Verified SW registration + precaching (12 entries), added online/offline indicator to all page headers via `useOnlineStatus` hook
-- Step 11: Full Home screen rewrite — assessment list with live queries, filter tabs (All/In Progress/Completed), progress bars, delete with ConfirmDialog modal, Mark Complete/Reopen from card footer
-- Step 12: Loading spinners, portrait-responsive sidebar with hamburger toggle, touch feedback (`active:scale`), `aria-label` on icon buttons, `focus-visible` styles
-- PDF report redesigned for residents: replaced assessor instructions with resident-friendly zone descriptions, grouped findings as Areas Requiring Attention (1-2) / Meets Basic Standards (3, summarized) / Positive Observations (4-5)
-- Score-3 items no longer listed individually unless ≤3 or has assessor notes — shows summary count instead
-- Added auto-generate recommendations: analyzes scores to pick top 5 issues and quick wins by severity/principle, editable after generation
-- Zone 7 "Next Zone" replaced with "Go to Summary" button
-- Fixed PDF bug: item matching used `item_order` (global per zone) instead of `item_text`, causing dashes for all principles after the first
-- Created `/close-session` global skill at `~/.claude/skills/close-session/SKILL.md`
 
 ### 2026-02-14 — Phase 2 Backend: Build + Deploy
 - **All 8 steps implemented:** server scaffolding, DB schema, CRUD, photo upload, sync, server-side PDF, frontend sync UI, Docker + deploy
@@ -305,3 +298,11 @@ Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch:
 - **Fixed clear signature bug**: `handleClear` in `SignaturePad.tsx` returned early when canvas ref was null (canvas not in DOM when showing saved signature image), preventing `setSigned(false)` and `onChange(null)` from firing
 - Updated memory files and todo list — all known bugs resolved
 - Next: voice notes feature, server-side report storage
+
+### 2026-02-20 — Actionable Recommendations + PDF Quick Win Fix
+- Auto-generated recommendations and quick wins now include actionable fix text from `ITEM_GUIDANCE` knowledge base via new `buildDescription()` helper in `recommendations.ts`
+- Format: "Zone — Principle: Item text\n\nRecommended action: {improvement text}"
+- Fixed PDF quick win rendering: `renderQuickWinItem` used fixed 12mm spacing causing text overlap with longer descriptions — now returns dynamic height like `renderRecommendationItem`
+- RecommendationEditor textarea increased from 2 to 4 rows to accommodate longer descriptions
+- Created project to-do list with 7 items: voice notes, server-side reports, PWA icons, dark mode N/A fix, photo annotation, item picker for manual recs
+- Version: 0.11.1
