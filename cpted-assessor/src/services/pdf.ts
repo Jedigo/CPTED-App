@@ -1,19 +1,21 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { db } from '../db/database';
-import { ZONES } from '../data/zones';
-import { ITEM_GUIDANCE } from '../data/item-guidance';
+import { getZonesForType, getItemGuidanceForType } from '../data/zone-registry';
 import {
   getScoreLabel,
   getCompletionCounts,
 } from './scoring';
 import type {
   Assessment,
+  ZoneDefinition,
   ZoneScore,
   ItemScore,
   Photo,
+  PropertyType,
   Recommendation,
 } from '../types';
+import type { ItemGuidance } from '../data/item-guidance';
 
 // --- Design constants ---
 const NAVY = '#1B3A5C';
@@ -48,7 +50,8 @@ function generateFilename(assessment: Assessment): string {
     .replace(/_+/g, '_')
     .substring(0, 40);
   const date = assessment.date_of_assessment || assessment.created_at.slice(0, 10);
-  return `CPTED_Assessment_${addr}_${date}.pdf`;
+  const typePrefix = assessment.property_type === 'places_of_worship' ? 'CPTED_Worship' : 'CPTED_Assessment';
+  return `${typePrefix}_${addr}_${date}.pdf`;
 }
 
 // --- Format helpers ---
@@ -92,6 +95,8 @@ async function loadLogoBase64(url: string): Promise<string | null> {
 // --- Data gathering ---
 interface PDFData {
   assessment: Assessment;
+  zones: ZoneDefinition[];
+  itemGuidance: Map<string, ItemGuidance>;
   zoneScores: ZoneScore[];
   itemScores: ItemScore[];
   photos: Photo[];
@@ -112,20 +117,36 @@ async function gatherAssessmentData(assessmentId: string): Promise<PDFData> {
 
   if (!assessment) throw new Error('Assessment not found');
 
+  const zones = getZonesForType(assessment.property_type);
+  const itemGuidance = getItemGuidanceForType(assessment.property_type);
+
   // Only include photos still referenced by an item_score's photo_ids
   const referencedIds = new Set(itemScores.flatMap((s) => s.photo_ids));
   const validPhotos = photos.filter((p) => referencedIds.has(p.id));
 
-  return { assessment, zoneScores, itemScores, photos: validPhotos, badgeLogo };
+  return { assessment, zones, itemGuidance, zoneScores, itemScores, photos: validPhotos, badgeLogo };
 }
 
 // --- Page helpers ---
-function addPageFooter(doc: jsPDF, pageNum: number) {
+function getReportTitle(propertyType: PropertyType): string {
+  switch (propertyType) {
+    case 'places_of_worship':
+      return 'CPTED Places of Worship Assessment';
+    default:
+      return 'CPTED Residential Assessment';
+  }
+}
+
+function getFooterText(propertyType: PropertyType): string {
+  return `${getReportTitle(propertyType)} Report — Volusia Sheriff's Office`;
+}
+
+function addPageFooter(doc: jsPDF, pageNum: number, propertyType: PropertyType = 'single_family_residential') {
   const pageHeight = doc.internal.pageSize.getHeight();
   doc.setFontSize(8);
   doc.setTextColor(150);
   doc.text(
-    'CPTED Residential Assessment Report — Volusia Sheriff\'s Office',
+    getFooterText(propertyType),
     PAGE_MARGIN,
     pageHeight - 8,
   );
@@ -137,11 +158,11 @@ function addPageFooter(doc: jsPDF, pageNum: number) {
   );
 }
 
-function ensureSpace(doc: jsPDF, needed: number, currentY: number): number {
+function ensureSpace(doc: jsPDF, needed: number, currentY: number, propertyType: PropertyType = 'single_family_residential'): number {
   const pageHeight = doc.internal.pageSize.getHeight();
   if (currentY + needed > pageHeight - 20) {
     doc.addPage();
-    addPageFooter(doc, doc.getNumberOfPages());
+    addPageFooter(doc, doc.getNumberOfPages(), propertyType);
     return 20;
   }
   return currentY;
@@ -151,6 +172,7 @@ function ensureSpace(doc: jsPDF, needed: number, currentY: number): number {
 
 function renderCoverPage(doc: jsPDF, data: PDFData): void {
   const { assessment } = data;
+  const pt = assessment.property_type;
 
   // Navy header bar
   doc.setFillColor(NAVY);
@@ -167,7 +189,7 @@ function renderCoverPage(doc: jsPDF, data: PDFData): void {
   doc.setTextColor(WHITE);
   doc.setFontSize(22);
   doc.setFont('helvetica', 'bold');
-  doc.text('CPTED Residential Assessment', PAGE_WIDTH / 2, 25, { align: 'center' });
+  doc.text(getReportTitle(pt), PAGE_WIDTH / 2, 25, { align: 'center' });
   doc.setFontSize(12);
   doc.setFont('helvetica', 'normal');
   doc.text('Crime Prevention Through Environmental Design', PAGE_WIDTH / 2, 35, {
@@ -198,15 +220,18 @@ function renderCoverPage(doc: jsPDF, data: PDFData): void {
   const rightX = PAGE_WIDTH / 2 + 10;
   const lineHeight = 7;
 
+  const ownerLabel = pt === 'places_of_worship' ? 'Organization:' : 'Homeowner:';
+  const contactLabel = pt === 'places_of_worship' ? 'Contact Person:' : 'Contact:';
   const metaItems: [string, string, number][] = [
-    ['Homeowner:', assessment.homeowner_name, leftX],
+    [ownerLabel, assessment.homeowner_name, leftX],
     ['Assessment Date:', formatDate(assessment.date_of_assessment), rightX],
-    ['Contact:', assessment.homeowner_contact || 'N/A', leftX],
+    [contactLabel, assessment.homeowner_contact || 'N/A', leftX],
     ['Assessment Type:', formatAssessmentType(assessment.assessment_type), rightX],
-    ['Assessor:', assessment.assessor_name, leftX],
+    ['Phone:', assessment.contact_phone || 'N/A', leftX],
     ['Time:', formatTimeOfAssessment(assessment.time_of_assessment), rightX],
-    ['Badge ID:', assessment.assessor_badge_id || 'N/A', leftX],
+    ['Assessor:', assessment.assessor_name, leftX],
     ['Weather:', assessment.weather_conditions || 'N/A', rightX],
+    ['Badge ID:', assessment.assessor_badge_id || 'N/A', leftX],
   ];
 
   doc.setFontSize(10);
@@ -249,7 +274,7 @@ function renderCoverPage(doc: jsPDF, data: PDFData): void {
     doc.text('N/A', PAGE_WIDTH / 2, y + 30, { align: 'center' });
   }
 
-  addPageFooter(doc, 1);
+  addPageFooter(doc, 1, pt);
 }
 
 function renderSummaryPage(doc: jsPDF, data: PDFData): void {
@@ -276,7 +301,7 @@ function renderSummaryPage(doc: jsPDF, data: PDFData): void {
     (s) => s.score !== null && !s.is_na && s.score! >= 4,
   );
 
-  const scoredZones = ZONES.map((zone) => {
+  const scoredZones = data.zones.map((zone) => {
     const zs = data.zoneScores.find((z) => z.zone_key === zone.key);
     return { name: zone.name, score: zs?.average_score ?? null };
   }).filter((z): z is { name: string; score: number } => z.score !== null);
@@ -285,7 +310,9 @@ function renderSummaryPage(doc: jsPDF, data: PDFData): void {
   const worstZones = scoredZones.filter((z) => z.score < 3).slice(0, 2);
   const bestZones = scoredZones.filter((z) => z.score >= 4).slice(-2).reverse();
 
-  let narrative = `This assessment evaluated ${data.assessment.address} across seven residential security zones, covering ${totalScored} checklist items.`;
+  const zoneCountWord = data.zones.length === 7 ? 'seven' : String(data.zones.length);
+  const typeLabel = data.assessment.property_type === 'places_of_worship' ? 'facility security' : 'residential security';
+  let narrative = `This assessment evaluated ${data.assessment.address} across ${zoneCountWord} ${typeLabel} zones, covering ${totalScored} checklist items.`;
   if (overall !== null) {
     narrative += ` The property received an overall score of ${overall.toFixed(1)} (${getScoreLabel(overall)}).`;
   }
@@ -316,7 +343,7 @@ function renderSummaryPage(doc: jsPDF, data: PDFData): void {
   const BAR_GAP = 5;
   const LABEL_WIDTH = 55;
 
-  for (const zone of ZONES) {
+  for (const zone of data.zones) {
     const zs = data.zoneScores.find((z) => z.zone_key === zone.key);
     const score = zs?.average_score ?? null;
 
@@ -367,7 +394,7 @@ function renderSummaryPage(doc: jsPDF, data: PDFData): void {
   doc.text('Detailed Zone Summary', PAGE_MARGIN, y);
   y += 3;
 
-  const zoneRows = ZONES.map((zone) => {
+  const zoneRows = data.zones.map((zone) => {
     const zs = data.zoneScores.find((z) => z.zone_key === zone.key);
     const zoneItems = data.itemScores.filter((s) => s.zone_key === zone.key);
     const counts = getCompletionCounts(zoneItems);
@@ -420,11 +447,12 @@ function renderSummaryPage(doc: jsPDF, data: PDFData): void {
     },
   });
 
-  addPageFooter(doc, pageNum);
+  addPageFooter(doc, pageNum, data.assessment.property_type);
 }
 
 // Resident-friendly zone descriptions (replaces assessor-facing instructions)
 const ZONE_RESIDENT_DESCRIPTIONS: Record<string, string> = {
+  // Residential
   street_approach:
     'This section evaluates how your property appears from the street, including visibility of your address and front entry, and how clearly defined the approach to your home is.',
   front_yard:
@@ -439,6 +467,23 @@ const ZONE_RESIDENT_DESCRIPTIONS: Record<string, string> = {
     'Good exterior lighting is one of the most effective security improvements for any home. This section reviews the quality, placement, and coverage of your outdoor lighting.',
   windows_interior:
     'This section covers window security, interior visibility considerations, security systems, and daily routines that affect your home\'s overall safety profile.',
+  // Places of Worship
+  perimeter_parking:
+    'This section evaluates the property perimeter, signage, parking areas, and how well access points are defined and monitored.',
+  building_exterior:
+    'This section reviews the building exterior, grounds maintenance, secondary doors, and utility areas for security and visibility.',
+  main_entry:
+    'This section covers the main entrance experience, greeting areas, and how well visitors are observed and welcomed upon arrival.',
+  sanctuary:
+    'This section assesses the primary worship space for sight lines, emergency preparedness, and security of sacred objects and clergy areas.',
+  fellowship_spaces:
+    'This section evaluates fellowship halls, kitchens, and meeting rooms used for community events — focusing on access control and emergency egress.',
+  education_children:
+    'Children\'s ministry areas require the highest level of access control and supervision. This section reviews check-in systems, classroom security, and child protection policies.',
+  admin_support:
+    'This section covers administrative offices, financial areas, and IT infrastructure — spaces that contain sensitive information and valuables.',
+  lighting_surveillance:
+    'Exterior lighting and surveillance systems are critical for places of worship, which are often unoccupied for extended periods. This section reviews coverage and functionality.',
 };
 
 // Render inline photos for a specific item (2 per row, compact)
@@ -472,7 +517,8 @@ function renderItemPhotos(doc: jsPDF, item: ItemScore, data: PDFData, y: number)
 }
 
 function renderZoneDetails(doc: jsPDF, data: PDFData): void {
-  for (const zone of ZONES) {
+  const pt = data.assessment.property_type;
+  for (const zone of data.zones) {
     doc.addPage();
     let y = 15;
 
@@ -537,7 +583,7 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
       const sortedConcerns = [...concerns].sort((a, b) => a.score! - b.score!);
 
       for (const item of sortedConcerns) {
-        const guidance = ITEM_GUIDANCE.get(item.item_text);
+        const guidance = data.itemGuidance.get(item.item_text);
         // Estimate height: item row ~14, notes ~14, guidance ~24
         const estimatedHeight = 14 + (item.notes?.trim() ? 14 : 0) + (guidance ? 28 : 0);
         y = ensureSpace(doc, estimatedHeight, y);
@@ -736,11 +782,10 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
       doc.setFontSize(8);
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(80);
-      doc.text(
-        'Your property demonstrates strong security practices in these areas:',
-        PAGE_MARGIN + 2,
-        y,
-      );
+      const strengthsIntro = pt === 'places_of_worship'
+        ? 'Your facility demonstrates strong security practices in these areas:'
+        : 'Your property demonstrates strong security practices in these areas:';
+      doc.text(strengthsIntro, PAGE_MARGIN + 2, y);
       y += 5;
 
       // Group Excellent (5) first, then Good (4)
@@ -829,14 +874,14 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(140);
       doc.text(
-        `${naItems.length} item${naItems.length === 1 ? '' : 's'} marked as not applicable to this property.`,
+        `${naItems.length} item${naItems.length === 1 ? '' : 's'} marked as not applicable to this ${pt === 'places_of_worship' ? 'facility' : 'property'}.`,
         PAGE_MARGIN,
         y,
       );
       y += 6;
     }
 
-    addPageFooter(doc, doc.getNumberOfPages());
+    addPageFooter(doc, doc.getNumberOfPages(), pt);
   }
 }
 
@@ -908,7 +953,7 @@ function renderRecommendations(doc: jsPDF, data: PDFData): void {
     }
   }
 
-  addPageFooter(doc, pageNum);
+  addPageFooter(doc, pageNum, data.assessment.property_type);
 }
 
 function renderRecommendationItem(
@@ -1039,7 +1084,7 @@ function renderLiabilityWaiver(doc: jsPDF, data: PDFData): void {
     doc.text(`Badge: ${data.assessment.assessor_badge_id}`, leftSig, y + 14);
   }
 
-  addPageFooter(doc, pageNum);
+  addPageFooter(doc, pageNum, data.assessment.property_type);
 }
 
 // --- Main export ---

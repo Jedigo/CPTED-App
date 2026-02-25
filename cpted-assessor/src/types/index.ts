@@ -1,5 +1,5 @@
 export type AssessmentStatus = 'in_progress' | 'completed' | 'synced'
-export type PropertyType = 'single_family_residential'
+export type PropertyType = 'single_family_residential' | 'places_of_worship'
 export type AssessmentType = 'initial' | 'follow_up' | 're_assessment'
 export type TimeOfAssessment = 'daytime' | 'nighttime' | 'both'
 export type Priority = 'high' | 'medium' | 'low'
@@ -17,6 +17,7 @@ export interface Assessment {
   zip: string
   homeowner_name: string
   homeowner_contact: string
+  contact_phone: string
   assessor_name: string
   assessor_badge_id?: string
   assessment_type: AssessmentType

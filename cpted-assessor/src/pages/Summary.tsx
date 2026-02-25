@@ -1,8 +1,8 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/database';
-import { ZONES } from '../data/zones';
+import { getZonesForType } from '../data/zone-registry';
 import {
   persistAllScores,
   getScoreColor,
@@ -46,6 +46,12 @@ export default function Summary() {
     () =>
       id ? db.item_scores.where('assessment_id').equals(id).toArray() : [],
     [id],
+  );
+
+  // Derive zones from assessment property type
+  const zones = useMemo(
+    () => getZonesForType(assessment?.property_type ?? 'single_family_residential'),
+    [assessment?.property_type],
   );
 
   // Recalculate all scores on mount for fresh data
@@ -113,13 +119,14 @@ export default function Summary() {
   const [recsError, setRecsError] = useState<string | null>(null);
 
   const handleAutoGenerate = useCallback(() => {
-    if (!id || !itemScores) return;
+    if (!id || !itemScores || !assessment) return;
     try {
       setRecsError(null);
-      const recs = generateRecommendations(itemScores, id, 5);
-      const fenceRec = generateFenceRecommendation(itemScores, id, recs);
+      const pt = assessment.property_type;
+      const recs = generateRecommendations(itemScores, id, 5, pt);
+      const fenceRec = generateFenceRecommendation(itemScores, id, recs, pt);
       if (fenceRec) recs.push(fenceRec);
-      const qw = generateQuickWins(itemScores, id, 5);
+      const qw = generateQuickWins(itemScores, id, 5, pt);
       setRecommendations(recs);
       setQuickWins(qw);
       persistRecs(recs, qw);
@@ -127,7 +134,7 @@ export default function Summary() {
       console.error('Auto-generate recommendations failed:', err);
       setRecsError(err instanceof Error ? err.message : 'Failed to generate recommendations');
     }
-  }, [id, itemScores, persistRecs]);
+  }, [id, itemScores, assessment, persistRecs]);
 
   const [generating, setGenerating] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
@@ -222,7 +229,7 @@ export default function Summary() {
     { scored: number; total: number }
   >();
   if (itemScores) {
-    for (const zone of ZONES) {
+    for (const zone of zones) {
       const zoneItems = itemScores.filter((s) => s.zone_key === zone.key);
       const { scored, total } = getCompletionCounts(zoneItems);
       itemCountsByZone.set(zone.key, { scored, total });

@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/database';
-import { ZONES } from '../data/zones';
+import { getZonesForType } from '../data/zone-registry';
 import type { ItemScore } from '../types';
 import { persistZoneScore, persistOverallScore, persistAllScores } from '../services/scoring';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
@@ -16,7 +16,7 @@ import ThemeToggle from '../components/ThemeToggle';
 export default function Assessment() {
   const { id } = useParams<{ id: string }>();
   const online = useOnlineStatus();
-  const [activeZoneKey, setActiveZoneKey] = useState(ZONES[0].key);
+  const [activeZoneKey, setActiveZoneKey] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [scoreRefOpen, setScoreRefOpen] = useState(false);
   const mainRef = useRef<HTMLDivElement>(null);
@@ -28,19 +28,33 @@ export default function Assessment() {
     [id],
   );
 
+  // Derive zones from assessment property type (only when assessment is loaded)
+  const zones = useMemo(
+    () => assessment ? getZonesForType(assessment.property_type) : [],
+    [assessment?.property_type],
+  );
+
+  // Set active zone when zones are available, or reset if current key is invalid
+  useEffect(() => {
+    if (zones.length === 0) return;
+    if (activeZoneKey === null || !zones.some((z) => z.key === activeZoneKey)) {
+      setActiveZoneKey(zones[0].key);
+    }
+  }, [zones, activeZoneKey]);
+
   const itemScores = useLiveQuery(
     () =>
       id ? db.item_scores.where('assessment_id').equals(id).toArray() : [],
     [id],
   );
 
-  // Initialize item scores on first load (141 records)
+  // Initialize item scores on first load
   useEffect(() => {
-    if (!id || itemScores === undefined || initRef.current) return;
+    if (!id || !assessment || itemScores === undefined || initRef.current) return;
     if (itemScores.length === 0) {
       initRef.current = true;
       const records: ItemScore[] = [];
-      for (const zone of ZONES) {
+      for (const zone of zones) {
         let itemOrder = 0;
         for (const principle of zone.principles) {
           for (const itemText of principle.items) {
@@ -61,7 +75,7 @@ export default function Assessment() {
       }
       db.item_scores.bulkAdd(records);
     }
-  }, [id, itemScores]);
+  }, [id, assessment, itemScores, zones]);
 
   // Persist all scores on mount (migration safeguard)
   useEffect(() => {
@@ -99,9 +113,9 @@ export default function Assessment() {
     return map;
   }, [itemScores]);
 
-  const activeZone = ZONES.find((z) => z.key === activeZoneKey)!;
-  const activeZoneIndex = ZONES.findIndex((z) => z.key === activeZoneKey);
-  const activeItemScores = itemScoresByZone.get(activeZoneKey) || [];
+  const activeZone = zones.find((z) => z.key === activeZoneKey);
+  const activeZoneIndex = zones.findIndex((z) => z.key === activeZoneKey);
+  const activeItemScores = activeZoneKey ? (itemScoresByZone.get(activeZoneKey) || []) : [];
 
   const handleScoreChange = useCallback(
     async (itemId: string, score: number | null, isNa: boolean) => {
@@ -115,7 +129,7 @@ export default function Assessment() {
         clearTimeout(persistTimerRef.current);
       }
       persistTimerRef.current = setTimeout(async () => {
-        if (!id) return;
+        if (!id || !activeZoneKey) return;
         const allItems = await db.item_scores
           .where('assessment_id')
           .equals(id)
@@ -137,13 +151,13 @@ export default function Assessment() {
 
   function goToPrevZone() {
     if (activeZoneIndex > 0) {
-      setActiveZoneKey(ZONES[activeZoneIndex - 1].key);
+      setActiveZoneKey(zones[activeZoneIndex - 1].key);
     }
   }
 
   function goToNextZone() {
-    if (activeZoneIndex < ZONES.length - 1) {
-      setActiveZoneKey(ZONES[activeZoneIndex + 1].key);
+    if (activeZoneIndex < zones.length - 1) {
+      setActiveZoneKey(zones[activeZoneIndex + 1].key);
     }
   }
 
@@ -153,7 +167,7 @@ export default function Assessment() {
   }, []);
 
   // Loading state
-  if (itemScores === undefined) {
+  if (itemScores === undefined || activeZoneKey === null || !activeZone) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-blue-pale gap-3">
         <div className="loading-spinner" />
@@ -215,7 +229,7 @@ export default function Assessment() {
             aria-label={online ? 'Online' : 'Offline'}
           />
           <span className="text-white/50 text-sm hidden sm:inline">
-            Zone {activeZoneIndex + 1}/{ZONES.length}
+            Zone {activeZoneIndex + 1}/{zones.length}
           </span>
           <Link
             to={`/assessment/${id}/summary`}
@@ -246,6 +260,7 @@ export default function Assessment() {
           } lg:translate-x-0 fixed lg:static top-[52px] bottom-0 left-0 z-30 transition-transform duration-200 ease-in-out`}
         >
           <ZoneSidebar
+            zones={zones}
             activeZoneKey={activeZoneKey}
             itemScoresByZone={itemScoresByZone}
             onSelectZone={handleSelectZone}
@@ -270,7 +285,7 @@ export default function Assessment() {
             >
               &larr; Previous Zone
             </button>
-            {activeZoneIndex === ZONES.length - 1 ? (
+            {activeZoneIndex === zones.length - 1 ? (
               <Link
                 to={`/assessment/${id}/summary`}
                 className="px-6 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95 bg-green-600 text-white hover:bg-green-700"

@@ -1,7 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
-import type { ItemScore, Recommendation } from '../types';
-import { ZONES } from '../data/zones';
-import { ITEM_GUIDANCE } from '../data/item-guidance';
+import type { ItemScore, PropertyType, Recommendation } from '../types';
+import { getZonesForType, getItemGuidanceForType } from '../data/zone-registry';
 
 // Principles where fixes tend to be low-cost / quick to implement
 const QUICK_WIN_PRINCIPLES = new Set([
@@ -16,13 +15,14 @@ interface ScoredItemContext {
   principleName: string;
 }
 
-function getItemContext(items: ItemScore[]): ScoredItemContext[] {
+function getItemContext(items: ItemScore[], propertyType: PropertyType = 'single_family_residential'): ScoredItemContext[] {
+  const zones = getZonesForType(propertyType);
   const results: ScoredItemContext[] = [];
 
   for (const item of items) {
     if (item.score === null || item.is_na) continue;
 
-    const zone = ZONES.find((z) => z.key === item.zone_key);
+    const zone = zones.find((z) => z.key === item.zone_key);
     if (!zone) continue;
 
     const principle = zone.principles.find((p) => p.key === item.principle);
@@ -39,9 +39,9 @@ function getItemContext(items: ItemScore[]): ScoredItemContext[] {
   return results;
 }
 
-function buildDescription(context: ScoredItemContext): string {
+function buildDescription(context: ScoredItemContext, propertyType: PropertyType = 'single_family_residential'): string {
   const heading = `${context.zoneName} — ${context.principleName}: ${context.item.item_text}`;
-  const guidance = ITEM_GUIDANCE.get(context.item.item_text);
+  const guidance = getItemGuidanceForType(propertyType).get(context.item.item_text);
   if (guidance) {
     return `${heading}\n\nRecommended action: ${guidance.improvement}`;
   }
@@ -62,8 +62,9 @@ export function generateRecommendations(
   allItems: ItemScore[],
   assessmentId: string,
   count = 5,
+  propertyType: PropertyType = 'single_family_residential',
 ): Recommendation[] {
-  const contextItems = getItemContext(allItems);
+  const contextItems = getItemContext(allItems, propertyType);
 
   // Get items scored 1-3 (Critical, Deficient, Adequate), sorted worst first
   const candidates = contextItems
@@ -78,13 +79,13 @@ export function generateRecommendations(
     id: uuidv4(),
     assessment_id: assessmentId,
     order: idx + 1,
-    description: buildDescription(c),
+    description: buildDescription(c, propertyType),
     priority: getPriority(c.item.score!),
     type: 'recommendation' as const,
   }));
 }
 
-// --- Auto-Fence Recommendation ---
+// --- Auto-Fence Recommendation (residential only) ---
 
 const FENCE_TRIGGER_ITEMS = new Set([
   'Rear yard at least partially visible from one or more neighboring properties',
@@ -106,7 +107,11 @@ export function generateFenceRecommendation(
   allItems: ItemScore[],
   assessmentId: string,
   existingRecs: Recommendation[],
+  propertyType: PropertyType = 'single_family_residential',
 ): Recommendation | null {
+  // Fence recommendation only applies to residential assessments
+  if (propertyType !== 'single_family_residential') return null;
+
   // Check if existing recommendations already mention fencing
   if (existingRecs.some((r) => /fence/i.test(r.description))) return null;
 
@@ -146,8 +151,9 @@ export function generateQuickWins(
   allItems: ItemScore[],
   assessmentId: string,
   count = 5,
+  propertyType: PropertyType = 'single_family_residential',
 ): Recommendation[] {
-  const contextItems = getItemContext(allItems);
+  const contextItems = getItemContext(allItems, propertyType);
 
   // Items scored 2-3 from quick-win principles (maintenance, lighting, behavioral)
   const easyFixes = contextItems.filter(
@@ -187,7 +193,7 @@ export function generateQuickWins(
     id: uuidv4(),
     assessment_id: assessmentId,
     order: idx + 1,
-    description: buildDescription(c),
+    description: buildDescription(c, propertyType),
     priority: c.item.score! <= 2 ? 'medium' as const : 'low' as const,
     type: 'quick_win' as const,
   }));

@@ -2,12 +2,13 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { v4 as uuidv4 } from 'uuid'
 import { db } from '../db/database'
-import { ZONES } from '../data/zones'
+import { getZonesForType } from '../data/zone-registry'
 import HeaderBackButton from '../components/HeaderBackButton'
 import ThemeToggle from '../components/ThemeToggle'
 import type {
   Assessment,
   AssessmentType,
+  PropertyType,
   TimeOfAssessment,
   ZoneScore,
 } from '../types'
@@ -20,12 +21,14 @@ function todayISO(): string {
 export default function NewAssessment() {
   const navigate = useNavigate()
 
+  const [propertyType, setPropertyType] = useState<PropertyType>('single_family_residential')
   const [address, setAddress] = useState('')
   const [city, setCity] = useState('')
   const [state, setState] = useState('FL')
   const [zip, setZip] = useState('')
   const [homeownerName, setHomeownerName] = useState('')
   const [homeownerContact, setHomeownerContact] = useState('')
+  const [contactPhone, setContactPhone] = useState('')
   const [assessorName, setAssessorName] = useState('')
   const [assessorBadgeId, setAssessorBadgeId] = useState('')
   const [assessmentType, setAssessmentType] = useState<AssessmentType>('initial')
@@ -70,13 +73,14 @@ export default function NewAssessment() {
         created_at: now,
         updated_at: now,
         status: 'in_progress',
-        property_type: 'single_family_residential',
+        property_type: propertyType,
         address: address.trim(),
         city: city.trim(),
         state: state.trim(),
         zip: zip.trim(),
         homeowner_name: homeownerName.trim(),
         homeowner_contact: homeownerContact.trim(),
+        contact_phone: contactPhone.trim(),
         assessor_name: assessorName.trim(),
         assessor_badge_id: assessorBadgeId.trim() || undefined,
         assessment_type: assessmentType,
@@ -91,7 +95,8 @@ export default function NewAssessment() {
         synced_at: null,
       }
 
-      const zoneScores: ZoneScore[] = ZONES.map((zone) => ({
+      const zones = getZonesForType(propertyType)
+      const zoneScores: ZoneScore[] = zones.map((zone) => ({
         id: uuidv4(),
         assessment_id: id,
         zone_key: zone.key,
@@ -202,13 +207,13 @@ export default function NewAssessment() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>
-                  Homeowner Name <span className="text-red-500">*</span>
+                  {propertyType === 'places_of_worship' ? 'Organization Name' : 'Homeowner Name'} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={homeownerName}
                   onChange={(e) => setHomeownerName(e.target.value)}
-                  placeholder="Jane Smith"
+                  placeholder={propertyType === 'places_of_worship' ? 'St. Mary Catholic Church' : 'Jane Smith'}
                   className={inputClass('homeownerName')}
                 />
                 {errors.homeownerName && (
@@ -216,26 +221,42 @@ export default function NewAssessment() {
                 )}
               </div>
               <div>
-                <label className={labelClass}>Homeowner Contact</label>
+                <label className={labelClass}>
+                  {propertyType === 'places_of_worship' ? 'Contact Person' : 'Homeowner Contact'}
+                </label>
                 <input
                   type="text"
                   value={homeownerContact}
                   onChange={(e) => setHomeownerContact(e.target.value)}
-                  placeholder="Phone or email"
+                  placeholder={propertyType === 'places_of_worship' ? 'Fr. John Smith' : 'Name or email'}
                   className={inputClass('homeownerContact')}
                 />
               </div>
             </div>
 
             <div>
+              <label className={labelClass}>Contact Phone</label>
+              <input
+                type="tel"
+                value={contactPhone}
+                onChange={(e) => setContactPhone(e.target.value)}
+                placeholder="(386) 555-1234"
+                className={inputClass('contactPhone')}
+              />
+            </div>
+
+            <div>
               <label className={labelClass}>Property Type</label>
               <select
-                value="single_family_residential"
-                disabled
-                className="w-full rounded-lg border border-ink/20 px-4 py-3 text-base bg-gray-50 text-ink/70"
+                value={propertyType}
+                onChange={(e) => setPropertyType(e.target.value as PropertyType)}
+                className="w-full rounded-lg border border-ink/20 px-4 py-3 text-base bg-surface outline-none focus:border-blue-medium focus:ring-2 focus:ring-blue-medium/30"
               >
                 <option value="single_family_residential">
                   Single Family Residential
+                </option>
+                <option value="places_of_worship">
+                  Places of Worship
                 </option>
               </select>
             </div>

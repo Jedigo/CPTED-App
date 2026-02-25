@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/database';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { getScoreColor, getScoreLabel } from '../services/scoring';
+import { getPropertyTypeLabel } from '../data/zone-registry';
 import {
   fetchServerAssessments,
   pullAssessment,
@@ -207,7 +208,7 @@ export default function Home() {
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-bold">CPTED Assessor</h1>
           <span className="text-white/40 text-sm hidden sm:inline">
-            Residential Site Assessment
+            Site Assessment Tool
           </span>
         </div>
         <div className="flex items-center gap-4">
@@ -355,6 +356,11 @@ export default function Home() {
                         <p className="text-sm text-ink/50 mt-0.5">
                           {assessment.city}, {assessment.state} {assessment.zip}
                         </p>
+                        {assessment.property_type !== 'single_family_residential' && (
+                          <span className="inline-block mt-1.5 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-purple-100 text-purple-700">
+                            {getPropertyTypeLabel(assessment.property_type)}
+                          </span>
+                        )}
                         <div className="flex items-center gap-3 mt-2 text-sm text-ink/40">
                           <span>{assessment.homeowner_name}</span>
                           <span>&middot;</span>
@@ -516,7 +522,7 @@ export default function Home() {
       </div>
 
       {/* Version indicator */}
-      <p className="text-center text-[10px] text-ink/50 mt-6">v0.11.1</p>
+      <p className="text-center text-[10px] text-ink/50 mt-6">v0.12.0</p>
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog
