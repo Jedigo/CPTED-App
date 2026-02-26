@@ -10,6 +10,7 @@ export const config = {
     database: process.env.DB_NAME || 'cpted',
   },
   photoDir: process.env.PHOTO_DIR || '/data/photos',
+  reportDir: process.env.REPORT_DIR || '/data/reports',
   cors: {
     origin: process.env.CORS_ORIGIN || '*',
   },

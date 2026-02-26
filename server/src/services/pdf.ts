@@ -5,8 +5,9 @@ import fs from 'fs/promises';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { assessments, zoneScores, itemScores, photos } from '../db/schema.js';
-import { ZONES } from '../data/zones.js';
-import { ITEM_GUIDANCE } from '../data/item-guidance.js';
+import { getZonesForType, getItemGuidanceForType } from '../data/zone-registry.js';
+import type { ZoneDefinition } from '../types/index.js';
+import type { ItemGuidance } from '../data/item-guidance.js';
 import { getScoreLabel, getCompletionCounts } from './scoring.js';
 
 // --- Design constants ---
@@ -31,6 +32,8 @@ interface PDFData {
   photos: PhotoRow[];
   photoBase64Map: Map<string, string>;
   badgeLogo: string | null;
+  zones: ZoneDefinition[];
+  itemGuidance: Map<string, ItemGuidance>;
 }
 
 // --- Logo loading (reads from server/assets/) ---
@@ -150,6 +153,11 @@ async function gatherAssessmentData(assessmentId: string): Promise<PDFData> {
   // Load logo
   const badgeLogo = await loadLogoBase64('volusia_sheriff_badge_transparent.png');
 
+  // Resolve zone definitions and item guidance by property type
+  const propertyType = (assessment.property_type as import('../types/index.js').PropertyType) || 'single_family_residential';
+  const zoneDefinitions = getZonesForType(propertyType);
+  const itemGuidance = getItemGuidanceForType(propertyType);
+
   return {
     assessment,
     zoneScores: zones,
@@ -157,16 +165,25 @@ async function gatherAssessmentData(assessmentId: string): Promise<PDFData> {
     photos: validPhotos,
     photoBase64Map,
     badgeLogo,
+    zones: zoneDefinitions,
+    itemGuidance,
   };
 }
 
 // --- Page helpers ---
-function addPageFooter(doc: jsPDF, pageNum: number) {
+function getReportTitle(assessment: AssessmentRow): string {
+  return assessment.property_type === 'places_of_worship'
+    ? 'CPTED Places of Worship Assessment'
+    : 'CPTED Residential Assessment';
+}
+
+function addPageFooter(doc: jsPDF, pageNum: number, assessment?: AssessmentRow) {
   const pageHeight = doc.internal.pageSize.getHeight();
+  const title = assessment ? getReportTitle(assessment) : 'CPTED Assessment';
   doc.setFontSize(8);
   doc.setTextColor(150);
   doc.text(
-    "CPTED Residential Assessment Report — Volusia Sheriff's Office",
+    `${title} Report — Volusia Sheriff's Office`,
     PAGE_MARGIN,
     pageHeight - 8,
   );
@@ -204,7 +221,7 @@ function renderCoverPage(doc: jsPDF, data: PDFData): void {
   doc.setTextColor(WHITE);
   doc.setFontSize(22);
   doc.setFont('helvetica', 'bold');
-  doc.text('CPTED Residential Assessment', PAGE_WIDTH / 2, 25, { align: 'center' });
+  doc.text(getReportTitle(assessment), PAGE_WIDTH / 2, 25, { align: 'center' });
   doc.setFontSize(12);
   doc.setFont('helvetica', 'normal');
   doc.text('Crime Prevention Through Environmental Design', PAGE_WIDTH / 2, 35, {
@@ -233,14 +250,19 @@ function renderCoverPage(doc: jsPDF, data: PDFData): void {
   const rightX = PAGE_WIDTH / 2 + 10;
   const lineHeight = 7;
 
+  const isWorship = assessment.property_type === 'places_of_worship';
+  const ownerLabel = isWorship ? 'Organization:' : 'Homeowner:';
+  const contactLabel = isWorship ? 'Contact Person:' : 'Contact:';
+
   const metaItems: [string, string, number][] = [
-    ['Homeowner:', assessment.homeowner_name, leftX],
+    [ownerLabel, assessment.homeowner_name, leftX],
     ['Assessment Date:', formatDate(assessment.date_of_assessment), rightX],
-    ['Contact:', assessment.homeowner_contact || 'N/A', leftX],
+    [contactLabel, assessment.homeowner_contact || 'N/A', leftX],
     ['Assessment Type:', formatAssessmentType(assessment.assessment_type), rightX],
-    ['Assessor:', assessment.assessor_name, leftX],
+    ['Phone:', assessment.contact_phone || 'N/A', leftX],
     ['Time:', formatTimeOfAssessment(assessment.time_of_assessment), rightX],
-    ['Badge ID:', assessment.assessor_badge_id || 'N/A', leftX],
+    ['Assessor:', assessment.assessor_name, leftX],
+    ['Badge ID:', assessment.assessor_badge_id || 'N/A', rightX],
   ];
 
   doc.setFontSize(10);
@@ -282,7 +304,7 @@ function renderCoverPage(doc: jsPDF, data: PDFData): void {
     doc.text('N/A', PAGE_WIDTH / 2, y + 30, { align: 'center' });
   }
 
-  addPageFooter(doc, 1);
+  addPageFooter(doc, 1, assessment);
 }
 
 function renderSummaryPage(doc: jsPDF, data: PDFData): void {
@@ -309,7 +331,7 @@ function renderSummaryPage(doc: jsPDF, data: PDFData): void {
     (s) => s.score !== null && !s.is_na && s.score! >= 4,
   );
 
-  const scoredZones = ZONES.map((zone) => {
+  const scoredZones = data.zones.map((zone) => {
     const zs = data.zoneScores.find((z) => z.zone_key === zone.key);
     return { name: zone.name, score: zs?.average_score ?? null };
   }).filter((z): z is { name: string; score: number } => z.score !== null);
@@ -318,7 +340,7 @@ function renderSummaryPage(doc: jsPDF, data: PDFData): void {
   const worstZones = scoredZones.filter((z) => z.score < 3).slice(0, 2);
   const bestZones = scoredZones.filter((z) => z.score >= 4).slice(-2).reverse();
 
-  let narrative = `This assessment evaluated ${data.assessment.address} across seven residential security zones, covering ${totalScored} checklist items.`;
+  let narrative = `This assessment evaluated ${data.assessment.address} across ${data.zones.length} security zones, covering ${totalScored} checklist items.`;
   if (overall !== null) {
     narrative += ` The property received an overall score of ${overall.toFixed(1)} (${getScoreLabel(overall)}).`;
   }
@@ -349,7 +371,7 @@ function renderSummaryPage(doc: jsPDF, data: PDFData): void {
   const BAR_GAP = 5;
   const LABEL_WIDTH = 55;
 
-  for (const zone of ZONES) {
+  for (const zone of data.zones) {
     const zs = data.zoneScores.find((z) => z.zone_key === zone.key);
     const score = zs?.average_score ?? null;
 
@@ -400,7 +422,7 @@ function renderSummaryPage(doc: jsPDF, data: PDFData): void {
   doc.text('Detailed Zone Summary', PAGE_MARGIN, y);
   y += 3;
 
-  const zoneRows = ZONES.map((zone) => {
+  const zoneRows = data.zones.map((zone) => {
     const zs = data.zoneScores.find((z) => z.zone_key === zone.key);
     const zoneItems = data.itemScores.filter((s) => s.zone_key === zone.key);
     const counts = getCompletionCounts(zoneItems);
@@ -453,7 +475,7 @@ function renderSummaryPage(doc: jsPDF, data: PDFData): void {
     },
   });
 
-  addPageFooter(doc, pageNum);
+  addPageFooter(doc, pageNum, data.assessment);
 }
 
 const ZONE_RESIDENT_DESCRIPTIONS: Record<string, string> = {
@@ -507,7 +529,7 @@ function renderItemPhotosServer(doc: jsPDF, itemId: string, data: PDFData, y: nu
 }
 
 function renderZoneDetails(doc: jsPDF, data: PDFData): void {
-  for (const zone of ZONES) {
+  for (const zone of data.zones) {
     doc.addPage();
     let y = 15;
 
@@ -572,7 +594,7 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
       const sortedConcerns = [...concerns].sort((a, b) => a.score! - b.score!);
 
       for (const item of sortedConcerns) {
-        const guidance = ITEM_GUIDANCE.get(item.item_text);
+        const guidance = data.itemGuidance.get(item.item_text);
         const estimatedHeight = 14 + (item.notes?.trim() ? 14 : 0) + (guidance ? 28 : 0);
         y = ensureSpace(doc, estimatedHeight, y);
 
@@ -854,7 +876,7 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
       y += 6;
     }
 
-    addPageFooter(doc, doc.getNumberOfPages());
+    addPageFooter(doc, doc.getNumberOfPages(), data.assessment);
   }
 }
 
@@ -929,7 +951,7 @@ function renderRecommendations(doc: jsPDF, data: PDFData): void {
     }
   }
 
-  addPageFooter(doc, pageNum);
+  addPageFooter(doc, pageNum, data.assessment);
 }
 
 function renderRecommendationItem(
@@ -1049,7 +1071,7 @@ function renderLiabilityWaiver(doc: jsPDF, data: PDFData): void {
     doc.text(`Badge: ${data.assessment.assessor_badge_id}`, leftSig, y + 14);
   }
 
-  addPageFooter(doc, pageNum);
+  addPageFooter(doc, pageNum, data.assessment);
 }
 
 // --- Main exports ---

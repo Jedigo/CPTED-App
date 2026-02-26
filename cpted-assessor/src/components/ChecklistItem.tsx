@@ -55,7 +55,7 @@ export default function ChecklistItem({
     <div
       className={`p-4 rounded-lg border transition-colors ${
         isNa
-          ? 'bg-gray-50 border-gray-200 opacity-60'
+          ? 'bg-ink/5 border-ink/10 opacity-60'
           : isScored
             ? 'border-l-4 border-l-score-good bg-surface border-t border-r border-b border-t-navy/10 border-r-navy/10 border-b-navy/10'
             : 'bg-surface border-ink/10'

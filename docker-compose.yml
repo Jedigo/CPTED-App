@@ -29,9 +29,11 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-cpted}
       DB_NAME: ${DB_NAME:-cpted}
       PHOTO_DIR: /data/photos
+      REPORT_DIR: /data/reports
       CORS_ORIGIN: "*"
     volumes:
       - photos:/data/photos
+      - reports:/data/reports
 
   nginx:
     image: nginx:alpine
@@ -47,3 +49,4 @@ services:
 volumes:
   pgdata:
   photos:
+  reports:

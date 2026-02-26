@@ -30,6 +30,7 @@ router.post('/sync', async (req, res, next) => {
         zip: payload.assessment.zip,
         homeowner_name: payload.assessment.homeowner_name,
         homeowner_contact: payload.assessment.homeowner_contact || '',
+        contact_phone: payload.assessment.contact_phone || '',
         assessor_name: payload.assessment.assessor_name,
         assessor_badge_id: payload.assessment.assessor_badge_id || null,
         assessment_type: payload.assessment.assessment_type || 'initial',

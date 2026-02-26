@@ -330,7 +330,7 @@ export default function Summary() {
                 <th className="px-6 py-3 text-center">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-navy/5">
+            <tbody className="divide-y divide-ink/5">
               {(zoneScores || []).map((zs) => {
                 const counts = itemCountsByZone.get(zs.zone_key);
                 return (

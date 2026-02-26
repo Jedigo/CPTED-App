@@ -1,5 +1,5 @@
 export type AssessmentStatus = 'in_progress' | 'completed' | 'synced';
-export type PropertyType = 'single_family_residential';
+export type PropertyType = 'single_family_residential' | 'places_of_worship';
 export type AssessmentType = 'initial' | 'follow_up' | 're_assessment';
 export type TimeOfAssessment = 'daytime' | 'nighttime' | 'both';
 export type Priority = 'high' | 'medium' | 'low';

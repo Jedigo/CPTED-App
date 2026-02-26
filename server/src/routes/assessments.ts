@@ -2,8 +2,8 @@ import { Router } from 'express';
 import { eq } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
-import { assessments, zoneScores, itemScores, photos } from '../db/schema.js';
-import { ZONES } from '../data/zones.js';
+import { assessments, zoneScores, itemScores, photos, reports } from '../db/schema.js';
+import { getZonesForType } from '../data/zone-registry.js';
 import { config } from '../config.js';
 import fs from 'fs/promises';
 import path from 'path';
@@ -29,6 +29,7 @@ router.post('/', async (req, res, next) => {
       zip: req.body.zip,
       homeowner_name: req.body.homeowner_name,
       homeowner_contact: req.body.homeowner_contact || '',
+      contact_phone: req.body.contact_phone || '',
       assessor_name: req.body.assessor_name,
       assessor_badge_id: req.body.assessor_badge_id || null,
       assessment_type: req.body.assessment_type || 'initial',
@@ -41,8 +42,9 @@ router.post('/', async (req, res, next) => {
       notes: req.body.notes || '',
     });
 
-    // Create zone_scores for all 7 zones
-    const zoneRows = ZONES.map((zone) => ({
+    // Create zone_scores for all zones (resolved by property type)
+    const propertyZones = getZonesForType(req.body.property_type || 'single_family_residential');
+    const zoneRows = propertyZones.map((zone) => ({
       id: uuidv4(),
       assessment_id: id,
       zone_key: zone.key,
@@ -55,7 +57,7 @@ router.post('/', async (req, res, next) => {
     }));
     await db.insert(zoneScores).values(zoneRows);
 
-    // Create item_scores for all 141 checklist items
+    // Create item_scores for all checklist items
     const itemRows: Array<{
       id: string;
       assessment_id: string;
@@ -69,7 +71,7 @@ router.post('/', async (req, res, next) => {
       photo_ids: string[];
     }> = [];
     let globalOrder = 0;
-    for (const zone of ZONES) {
+    for (const zone of propertyZones) {
       for (const principle of zone.principles) {
         for (const itemText of principle.items) {
           itemRows.push({
@@ -180,7 +182,7 @@ router.put('/:id', async (req, res, next) => {
     const updates: Record<string, unknown> = { updated_at: new Date() };
     const allowedFields = [
       'status', 'address', 'city', 'state', 'zip',
-      'homeowner_name', 'homeowner_contact', 'assessor_name', 'assessor_badge_id',
+      'homeowner_name', 'homeowner_contact', 'contact_phone', 'assessor_name', 'assessor_badge_id',
       'assessment_type', 'weather_conditions', 'time_of_assessment', 'date_of_assessment',
       'overall_score', 'top_recommendations', 'quick_wins', 'notes',
     ];
@@ -229,14 +231,19 @@ router.put('/:id', async (req, res, next) => {
   }
 });
 
-// DELETE /api/assessments/:id — Cascade delete + remove photo files
+// DELETE /api/assessments/:id — Cascade delete + remove photo/report files
 router.delete('/:id', async (req, res, next) => {
   try {
-    // Get photo paths before deleting
+    // Get photo and report paths before deleting
     const photoRows = await db
       .select({ blob_path: photos.blob_path })
       .from(photos)
       .where(eq(photos.assessment_id, req.params.id));
+
+    const reportRows = await db
+      .select({ blob_path: reports.blob_path })
+      .from(reports)
+      .where(eq(reports.assessment_id, req.params.id));
 
     // CASCADE delete handles all related rows
     const result = await db
@@ -258,12 +265,25 @@ router.delete('/:id', async (req, res, next) => {
       }
     }
 
-    // Try to remove the assessment photo directory
-    const photoDir = path.join(config.photoDir, req.params.id);
-    try {
-      await fs.rmdir(photoDir);
-    } catch {
-      // Directory may not exist or not be empty
+    // Remove report files from disk
+    for (const { blob_path } of reportRows) {
+      try {
+        await fs.unlink(blob_path);
+      } catch {
+        // File may not exist
+      }
+    }
+
+    // Try to remove the assessment photo and report directories
+    for (const dir of [
+      path.join(config.photoDir, req.params.id),
+      path.join(config.reportDir, req.params.id),
+    ]) {
+      try {
+        await fs.rmdir(dir);
+      } catch {
+        // Directory may not exist or not be empty
+      }
     }
 
     res.json({ deleted: true });

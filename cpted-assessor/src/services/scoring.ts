@@ -83,11 +83,11 @@ export function getScoreColor(score: number): string {
 
 /** Tailwind background color class for a score value (table rows) */
 export function getScoreBgColor(score: number): string {
-  if (score < 2) return 'bg-red-50';
-  if (score < 3) return 'bg-orange-50';
-  if (score < 4) return 'bg-yellow-50';
-  if (score < 5) return 'bg-green-50';
-  return 'bg-emerald-50';
+  if (score < 2) return 'bg-red-50 dark:bg-red-950';
+  if (score < 3) return 'bg-orange-50 dark:bg-orange-950';
+  if (score < 4) return 'bg-yellow-50 dark:bg-yellow-950';
+  if (score < 5) return 'bg-green-50 dark:bg-green-950';
+  return 'bg-emerald-50 dark:bg-emerald-950';
 }
 
 /** Human-readable label for a score value */

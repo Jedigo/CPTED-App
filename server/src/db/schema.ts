@@ -22,6 +22,7 @@ export const assessments = pgTable('assessments', {
   zip: varchar('zip', { length: 10 }).notNull(),
   homeowner_name: varchar('homeowner_name', { length: 255 }).notNull(),
   homeowner_contact: varchar('homeowner_contact', { length: 255 }).notNull().default(''),
+  contact_phone: varchar('contact_phone', { length: 50 }).notNull().default(''),
   assessor_name: varchar('assessor_name', { length: 255 }).notNull(),
   assessor_badge_id: varchar('assessor_badge_id', { length: 50 }),
   assessment_type: varchar('assessment_type', { length: 20 }).notNull().default('initial'),
@@ -81,6 +82,18 @@ export const photos = pgTable('photos', {
   compass_heading: real('compass_heading'),
   annotation_data: jsonb('annotation_data'),
   synced: boolean('synced').notNull().default(false),
+});
+
+export const reports = pgTable('reports', {
+  id: uuid('id').primaryKey(),
+  assessment_id: uuid('assessment_id')
+    .notNull()
+    .references(() => assessments.id, { onDelete: 'cascade' }),
+  blob_path: varchar('blob_path', { length: 500 }).notNull(),
+  filename: varchar('filename', { length: 255 }).notNull(),
+  mime_type: varchar('mime_type', { length: 50 }).notNull().default('application/pdf'),
+  file_size: integer('file_size').notNull(),
+  generated_at: timestamp('generated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const recommendations = pgTable('recommendations', {

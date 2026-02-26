@@ -22,6 +22,20 @@
       "when": 1771200000000,
       "tag": "0002_add_assessor_signature",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1772100000000,
+      "tag": "0003_add_contact_phone",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1772100100000,
+      "tag": "0004_add_reports_table",
+      "breakpoints": true
     }
   ]
 }
