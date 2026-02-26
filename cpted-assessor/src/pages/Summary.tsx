@@ -424,6 +424,8 @@ export default function Summary() {
               assessmentId={id}
               maxItems={5}
               onChange={handleRecsChange}
+              itemScores={itemScores ?? []}
+              propertyType={assessment.property_type}
             />
           )}
         </div>
@@ -439,6 +441,8 @@ export default function Summary() {
               type="quick_win"
               assessmentId={id}
               onChange={handleQuickWinsChange}
+              itemScores={itemScores ?? []}
+              propertyType={assessment.property_type}
             />
           )}
         </div>

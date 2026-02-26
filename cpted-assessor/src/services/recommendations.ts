@@ -8,14 +8,14 @@ const QUICK_WIN_PRINCIPLES = new Set([
   'behavioral',
 ]);
 
-interface ScoredItemContext {
+export interface ScoredItemContext {
   item: ItemScore;
   zoneName: string;
   zoneOrder: number;
   principleName: string;
 }
 
-function getItemContext(items: ItemScore[], propertyType: PropertyType = 'single_family_residential'): ScoredItemContext[] {
+export function getItemContext(items: ItemScore[], propertyType: PropertyType = 'single_family_residential'): ScoredItemContext[] {
   const zones = getZonesForType(propertyType);
   const results: ScoredItemContext[] = [];
 
@@ -39,7 +39,7 @@ function getItemContext(items: ItemScore[], propertyType: PropertyType = 'single
   return results;
 }
 
-function buildDescription(context: ScoredItemContext, propertyType: PropertyType = 'single_family_residential'): string {
+export function buildDescription(context: ScoredItemContext, propertyType: PropertyType = 'single_family_residential'): string {
   const heading = `${context.zoneName} — ${context.principleName}: ${context.item.item_text}`;
   const guidance = getItemGuidanceForType(propertyType).get(context.item.item_text);
   if (guidance) {
@@ -48,7 +48,7 @@ function buildDescription(context: ScoredItemContext, propertyType: PropertyType
   return heading;
 }
 
-function getPriority(score: number): 'high' | 'medium' | 'low' {
+export function getPriority(score: number): 'high' | 'medium' | 'low' {
   if (score <= 1) return 'high';
   if (score <= 2) return 'medium';
   return 'low';

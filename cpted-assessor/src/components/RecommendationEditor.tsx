@@ -1,5 +1,7 @@
+import { useState, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import type { Recommendation, Priority, RecommendationType } from '../types';
+import type { Recommendation, Priority, RecommendationType, ItemScore, PropertyType } from '../types';
+import ItemPickerModal from './ItemPickerModal';
 
 interface RecommendationEditorProps {
   items: Recommendation[];
@@ -7,6 +9,8 @@ interface RecommendationEditorProps {
   assessmentId: string;
   maxItems?: number;
   onChange: (items: Recommendation[]) => void;
+  itemScores?: ItemScore[];
+  propertyType?: PropertyType;
 }
 
 const PRIORITY_OPTIONS: { value: Priority; label: string; colors: string }[] = [
@@ -35,9 +39,21 @@ export default function RecommendationEditor({
   assessmentId,
   maxItems,
   onChange,
+  itemScores,
+  propertyType,
 }: RecommendationEditorProps) {
   const label = type === 'recommendation' ? 'Recommendation' : 'Quick Win';
   const atMax = maxItems !== undefined && items.length >= maxItems;
+
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Build set of existing descriptions for duplicate detection
+  const existingDescriptions = useMemo(
+    () => new Set(items.map((item) => item.description)),
+    [items],
+  );
+
+  const slotsAvailable = maxItems !== undefined ? maxItems - items.length : 99;
 
   function handleAdd() {
     if (atMax) return;
@@ -74,11 +90,21 @@ export default function RecommendationEditor({
     onChange(updated.map((item, i) => ({ ...item, order: i + 1 })));
   }
 
+  function handlePickerConfirm(picked: Recommendation[]) {
+    // Merge picked items, re-number orders
+    const merged = [...items, ...picked].map((item, i) => ({
+      ...item,
+      order: i + 1,
+    }));
+    onChange(merged);
+    setPickerOpen(false);
+  }
+
   return (
     <div className="space-y-3">
       {items.length === 0 && (
         <p className="text-ink/40 text-sm italic py-2">
-          No {label.toLowerCase()}s yet. Tap &ldquo;+ Add&rdquo; to begin.
+          No {label.toLowerCase()}s yet. Tap &ldquo;+ Add&rdquo; or &ldquo;Pick from Items&rdquo; to begin.
         </p>
       )}
 
@@ -160,20 +186,47 @@ export default function RecommendationEditor({
         </div>
       ))}
 
-      {/* Add button */}
-      <button
-        type="button"
-        onClick={handleAdd}
-        disabled={atMax}
-        className={`w-full py-3 rounded-lg border-2 border-dashed text-sm font-semibold transition-colors ${
-          atMax
-            ? 'border-ink/10 text-ink/25 cursor-not-allowed'
-            : 'border-ink/20 text-ink/50 hover:border-blue-medium hover:text-blue-medium'
-        }`}
-      >
-        + Add {label}
-        {maxItems !== undefined && ` (${items.length}/${maxItems})`}
-      </button>
+      {/* Action buttons */}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={handleAdd}
+          disabled={atMax}
+          className={`flex-1 py-3 rounded-lg border-2 border-dashed text-sm font-semibold transition-colors ${
+            atMax
+              ? 'border-ink/10 text-ink/25 cursor-not-allowed'
+              : 'border-ink/20 text-ink/50 hover:border-blue-medium hover:text-blue-medium'
+          }`}
+        >
+          + Add {label}
+          {maxItems !== undefined && ` (${items.length}/${maxItems})`}
+        </button>
+
+        {itemScores && itemScores.length > 0 && propertyType && !atMax && (
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            className="flex-1 py-3 rounded-lg border-2 border-dashed text-sm font-semibold border-blue-medium/30 text-blue-medium hover:border-blue-medium hover:bg-blue-medium/5 transition-colors"
+          >
+            Pick from Items
+          </button>
+        )}
+      </div>
+
+      {/* Item picker modal */}
+      {itemScores && propertyType && (
+        <ItemPickerModal
+          open={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          onConfirm={handlePickerConfirm}
+          itemScores={itemScores}
+          propertyType={propertyType}
+          type={type}
+          assessmentId={assessmentId}
+          existingDescriptions={existingDescriptions}
+          slotsAvailable={slotsAvailable}
+        />
+      )}
     </div>
   );
 }

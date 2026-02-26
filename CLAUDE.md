@@ -54,6 +54,7 @@ cpted-assessor/
 │   │   └── ThemeContext.tsx       # Dark mode context + provider + useTheme hook
 │   ├── components/
 │   │   ├── ThemeToggle.tsx        # Sun/moon dark mode toggle button
+│   │   ├── ItemPickerModal.tsx   # Pick scored items as recommendations/quick wins
 │   │   ├── ZoneSidebar.tsx       # Zone nav with completion indicators
 │   │   ├── ZoneView.tsx          # Active zone display
 │   │   ├── PrincipleSection.tsx  # Collapsible principle with items
@@ -246,13 +247,12 @@ This requires building a knowledge base mapping each of the 64 checklist items t
 
 ## Current Status
 
-**v0.12.0 deployed.** Places of Worship assessment type with 8 zones and 70 checklist items. Zone registry architecture maps PropertyType to zones/guidance. Dark mode, auto-explain deficient findings, auto-fence (residential only), PDF with dynamic titles/labels. Contact phone field added. Redeploy with `./deploy.sh`.
+**v0.14.0 deployed.** Item picker for manual recommendations/quick wins. Places of Worship assessment type with 8 zones and 70 checklist items. Zone registry architecture maps PropertyType to zones/guidance. Dark mode, auto-explain deficient findings, auto-fence (residential only), PDF with dynamic titles/labels. Contact phone field added. Redeploy with `./deploy.sh`.
 
 **Remaining items / To-Do:**
 - Update server-side `pdf.ts` and zone data for worship assessments (server still residential-only)
 - Voice notes feature (planned)
 - Server-side report storage (planned)
-- Item picker for manual recommendations/quick wins — select from scored items instead of typing freeform
 - Photo annotation — draw arrows/circles on captured photos to highlight issues
 - Replace PWA icon SVG placeholders with proper PNGs
 - Fix dark mode for disabled/N/A states (bg-gray-50 not dark-aware)
@@ -260,20 +260,6 @@ This requires building a knowledge base mapping each of the 64 checklist items t
 Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch: `main`)
 
 ## Session Log
-
-### 2026-02-14 — PDF Report Polish + Photo Storage Fix
-- **7 PDF visual improvements** applied to both client (`cpted-assessor/src/services/pdf.ts`) and server (`server/src/services/pdf.ts`):
-  1. Removed score legend table from resident-facing report
-  2. Added auto-generated executive summary paragraph
-  3. Added zone score color bars (horizontal bar chart)
-  4. Improved score-3 section → "Opportunities for Enhancement" with intro text, 3-bullet cap
-  5. Improved positive observations → grouped by Excellent/Good, inline notes
-  6. Photos now 2-per-row with checklist item text captions (no GPS)
-  7. Visual polish — accent lines, section dividers, better spacing
-- **Fixed Safari IndexedDB Blob bug**: Photos stored as Blobs became unreadable on iPad Safari (FileReader, arrayBuffer(), and createObjectURL+fetch all failed). Migrated photo storage from `blob: Blob` to `data: string` (base64 data URL) — `canvas.toDataURL()` at capture time, stored directly in IndexedDB
-- Updated Photo type, `compressImage()`, `savePhoto()`, `PhotoThumbnail`, `PhotoViewer`, `sync.ts`, and `pdf.ts` to use new format with legacy Blob fallback
-- Added version indicator (`v0.6.1`) to Home screen footer
-- Versions: `cpted-assessor` 0.6.1, `server` 0.1.1
 
 ### 2026-02-16 — Dark Mode for Night Assessments
 - Added dark mode toggle (v0.10.0): semantic CSS tokens (`--color-surface`, `--color-ink`) + `.dark` class on `<html>`, persisted to localStorage
@@ -309,3 +295,10 @@ Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch:
 - Added `contact_phone` field to Assessment type, form, and PDF
 - Fixed race condition: worship assessments stuck on loading spinner because zones defaulted to residential before assessment loaded
 - Version: 0.12.0
+
+### 2026-02-26 — Item Picker for Manual Recommendations/Quick Wins
+- Added "Pick from Items" button to RecommendationEditor — opens modal showing all scored checklist items grouped by zone
+- Created `ItemPickerModal.tsx` with score badges, duplicate detection ("Added" badge), slot limit enforcement, collapsible zones
+- Exported `ScoredItemContext`, `getItemContext`, `buildDescription`, `getPriority` from `recommendations.ts` for reuse
+- Modified `RecommendationEditor.tsx` (new props: `itemScores`, `propertyType`) and `Summary.tsx` (passes props through)
+- Version: 0.14.0
