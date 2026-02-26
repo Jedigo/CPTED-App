@@ -11,6 +11,7 @@ import ZoneSidebar from '../components/ZoneSidebar';
 import ZoneView from '../components/ZoneView';
 import HeaderBackButton from '../components/HeaderBackButton';
 import ScoreReference from '../components/ScoreReference';
+import EditAssessmentInfo from '../components/EditAssessmentInfo';
 import ThemeToggle from '../components/ThemeToggle';
 
 export default function Assessment() {
@@ -19,6 +20,7 @@ export default function Assessment() {
   const [activeZoneKey, setActiveZoneKey] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [scoreRefOpen, setScoreRefOpen] = useState(false);
+  const [editInfoOpen, setEditInfoOpen] = useState(false);
   const mainRef = useRef<HTMLDivElement>(null);
   const initRef = useRef(false);
   const persistTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
@@ -214,6 +216,13 @@ export default function Assessment() {
         </div>
         <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
           <ThemeToggle />
+          <button
+            type="button"
+            onClick={() => setEditInfoOpen(true)}
+            className="px-3 py-1.5 rounded-lg border border-white/20 hover:bg-white/10 text-white/70 hover:text-white active:scale-95 transition-all text-xs font-medium flex-shrink-0"
+          >
+            Edit Info
+          </button>
           {/* Score reference toggle */}
           <button
             type="button"
@@ -241,6 +250,7 @@ export default function Assessment() {
       </header>
 
       <ScoreReference open={scoreRefOpen} onClose={() => setScoreRefOpen(false)} />
+      <EditAssessmentInfo assessment={assessment} open={editInfoOpen} onClose={() => setEditInfoOpen(false)} />
 
       {/* Body: sidebar + main content */}
       <div className="flex flex-1 overflow-hidden relative">

@@ -17,6 +17,7 @@ import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import HeaderBackButton from '../components/HeaderBackButton';
 import RecommendationEditor from '../components/RecommendationEditor';
 import SignaturePad from '../components/SignaturePad';
+import EditAssessmentInfo from '../components/EditAssessmentInfo';
 import ThemeToggle from '../components/ThemeToggle';
 import type { Recommendation } from '../types';
 
@@ -139,6 +140,7 @@ export default function Summary() {
   const [generating, setGenerating] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
 
+  const [editInfoOpen, setEditInfoOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncSuccess, setSyncSuccess] = useState<string | null>(null);
@@ -260,6 +262,13 @@ export default function Summary() {
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
           <ThemeToggle />
+          <button
+            type="button"
+            onClick={() => setEditInfoOpen(true)}
+            className="px-3 py-1.5 rounded-lg border border-white/20 hover:bg-white/10 text-white/70 hover:text-white active:scale-95 transition-all text-xs font-medium flex-shrink-0"
+          >
+            Edit Info
+          </button>
           <span
             className={`w-2 h-2 rounded-full ${online ? 'bg-green-400' : 'bg-red-400'}`}
             aria-label={online ? 'Online' : 'Offline'}
@@ -275,6 +284,8 @@ export default function Summary() {
           </span>
         </div>
       </header>
+
+      <EditAssessmentInfo assessment={assessment} open={editInfoOpen} onClose={() => setEditInfoOpen(false)} />
 
       <div className="max-w-4xl mx-auto px-6 py-8 space-y-8">
         {/* Overall Score Card */}

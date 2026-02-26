@@ -34,7 +34,7 @@ export default function NewAssessment() {
   const [assessmentType, setAssessmentType] = useState<AssessmentType>('initial')
   const [dateOfAssessment, setDateOfAssessment] = useState(todayISO())
   const [timeOfAssessment, setTimeOfAssessment] = useState<TimeOfAssessment>('daytime')
-  const [weatherConditions, setWeatherConditions] = useState('')
+  const [weatherConditions] = useState('')
 
   const [errors, setErrors] = useState<Record<string, boolean>>({})
   const [submitting, setSubmitting] = useState(false)
@@ -326,26 +326,14 @@ export default function NewAssessment() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={labelClass}>Date of Assessment</label>
-                <input
-                  type="date"
-                  value={dateOfAssessment}
-                  onChange={(e) => setDateOfAssessment(e.target.value)}
-                  className="w-full rounded-lg border border-ink/20 px-4 py-3 text-base bg-surface outline-none focus:border-blue-medium focus:ring-2 focus:ring-blue-medium/30"
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Weather Conditions</label>
-                <input
-                  type="text"
-                  value={weatherConditions}
-                  onChange={(e) => setWeatherConditions(e.target.value)}
-                  placeholder="Clear, 78°F"
-                  className={inputClass('weatherConditions')}
-                />
-              </div>
+            <div>
+              <label className={labelClass}>Date of Assessment</label>
+              <input
+                type="date"
+                value={dateOfAssessment}
+                onChange={(e) => setDateOfAssessment(e.target.value)}
+                className="w-full rounded-lg border border-ink/20 px-4 py-3 text-base bg-surface outline-none focus:border-blue-medium focus:ring-2 focus:ring-blue-medium/30"
+              />
             </div>
           </div>
         </section>

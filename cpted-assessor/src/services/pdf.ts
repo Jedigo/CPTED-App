@@ -230,8 +230,7 @@ function renderCoverPage(doc: jsPDF, data: PDFData): void {
     ['Phone:', assessment.contact_phone || 'N/A', leftX],
     ['Time:', formatTimeOfAssessment(assessment.time_of_assessment), rightX],
     ['Assessor:', assessment.assessor_name, leftX],
-    ['Weather:', assessment.weather_conditions || 'N/A', rightX],
-    ['Badge ID:', assessment.assessor_badge_id || 'N/A', leftX],
+    ['Badge ID:', assessment.assessor_badge_id || 'N/A', rightX],
   ];
 
   doc.setFontSize(10);

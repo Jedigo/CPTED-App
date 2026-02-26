@@ -36,7 +36,11 @@ cpted-assessor/
 │   ├── main.tsx
 │   ├── App.tsx
 │   ├── data/
-│   │   └── zones.ts              # Zone/checklist definitions (SOURCE OF TRUTH)
+│   │   ├── zones.ts              # Residential zone/checklist definitions
+│   │   ├── worship-zones.ts      # Worship zone/checklist definitions (8 zones, 70 items)
+│   │   ├── item-guidance.ts      # Residential CPTED guidance per item
+│   │   ├── worship-item-guidance.ts # Worship CPTED guidance per item
+│   │   └── zone-registry.ts      # getZonesForType() / getItemGuidanceForType() dispatcher
 │   ├── db/
 │   │   └── database.ts           # Dexie.js setup and schema
 │   ├── types/
@@ -168,13 +172,13 @@ The full checklist item text lives in `src/data/zones.ts`. Trimmed from 141 to 6
 
 ## Critical Rules
 
-1. `zones.ts` is the **source of truth** for all checklist content
+1. `zones.ts` and `worship-zones.ts` are the **source of truth** for checklist content; resolve via `zone-registry.ts`
 2. Scoring is **1-5** (not 0-5) — no zero score exists
 3. **N/A items excluded** from all score calculations
 4. Photos stored as **base64 data URL strings** in IndexedDB (NOT Blobs — Safari detaches Blob data from IndexedDB, making it unreadable)
 5. PDF must include the **liability waiver verbatim** (see project plan)
 6. PWA manifest app name: **"CPTED Assessor"**
-7. `property_type` only implements `single_family_residential` for now — design UI to be expandable
+7. `property_type` supports `single_family_residential` and `places_of_worship` — add new types via zone registry
 8. Timestamps: **local time for display**, stored as **ISO 8601 UTC** internally
 9. Photo capture should auto-grab **GPS coordinates and timestamp** from device
 10. **Version bumps are required** on every commit that changes app functionality. Bump the semver version in both `cpted-assessor/package.json` and the version display in `cpted-assessor/src/pages/Home.tsx`. Use patch for fixes, minor for features, major for breaking changes.
@@ -242,9 +246,10 @@ This requires building a knowledge base mapping each of the 64 checklist items t
 
 ## Current Status
 
-**v0.11.1 deployed.** Dark mode for night assessments. Auto-explain deficient findings and auto-fence recommendation features. Checklist trimmed to 63 items. Phase 2 backend live. PDF report polished with Volusia Sheriff badge logo on cover page. Photo storage uses base64 data URLs (Safari fix). Auto-generated recommendations now include actionable fix text from ITEM_GUIDANCE. Redeploy with `./deploy.sh`.
+**v0.12.0 deployed.** Places of Worship assessment type with 8 zones and 70 checklist items. Zone registry architecture maps PropertyType to zones/guidance. Dark mode, auto-explain deficient findings, auto-fence (residential only), PDF with dynamic titles/labels. Contact phone field added. Redeploy with `./deploy.sh`.
 
 **Remaining items / To-Do:**
+- Update server-side `pdf.ts` and zone data for worship assessments (server still residential-only)
 - Voice notes feature (planned)
 - Server-side report storage (planned)
 - Item picker for manual recommendations/quick wins — select from scored items instead of typing freeform
@@ -255,17 +260,6 @@ This requires building a knowledge base mapping each of the 64 checklist items t
 Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch: `main`)
 
 ## Session Log
-
-### 2026-02-14 — Phase 2 Backend: Build + Deploy
-- **All 8 steps implemented:** server scaffolding, DB schema, CRUD, photo upload, sync, server-side PDF, frontend sync UI, Docker + deploy
-- Server: Express 5 + TypeScript + Drizzle ORM + PostgreSQL 16, all in `server/` directory
-- DB: 5 tables (assessments, zone_scores, item_scores, photos, recommendations) with CASCADE deletes, auto-migrate on startup
-- Sync: `POST /api/sync` upserts full payload in a Drizzle transaction, recalculates scores; photos uploaded separately via multipart
-- Frontend: new `sync.ts` service, "Sync to Server" button on Summary page, "Synced" status badge on Home cards
-- Deploy: `docker-compose.yml` (postgres:16-alpine + Node.js app + nginx:alpine), `deploy.sh` (build locally → rsync → docker compose up)
-- Deployed to `cpted-server` VM (Ubuntu 24.04, Tailscale 100.91.180.116) at `~/cpted-app/`
-- Fixed: `state` column widened from varchar(2) to varchar(50), sync transaction rewritten to use Drizzle `db.transaction()` instead of manual BEGIN/COMMIT on pool client
-- Verified iPad → Tailscale → server sync end-to-end
 
 ### 2026-02-14 — PDF Report Polish + Photo Storage Fix
 - **7 PDF visual improvements** applied to both client (`cpted-assessor/src/services/pdf.ts`) and server (`server/src/services/pdf.ts`):
@@ -306,3 +300,12 @@ Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch:
 - RecommendationEditor textarea increased from 2 to 4 rows to accommodate longer descriptions
 - Created project to-do list with 7 items: voice notes, server-side reports, PWA icons, dark mode N/A fix, photo annotation, item picker for manual recs
 - Version: 0.11.1
+
+### 2026-02-26 — Places of Worship Assessment Type
+- Added `places_of_worship` PropertyType with 8 zones (70 checklist items) including Catholic-specific items (sacristy, tabernacle, altar/chancel)
+- Created zone registry architecture: `zone-registry.ts` dispatches zones and item guidance by property type
+- New files: `worship-zones.ts`, `worship-item-guidance.ts`, `zone-registry.ts`
+- Modified 9 files: types, NewAssessment (property type dropdown + dynamic labels), Assessment, ZoneSidebar (zones prop), Summary, recommendations (propertyType param, fence skip for non-residential), pdf (dynamic titles/footer/labels/descriptions), Home (property type badge)
+- Added `contact_phone` field to Assessment type, form, and PDF
+- Fixed race condition: worship assessments stuck on loading spinner because zones defaulted to residential before assessment loaded
+- Version: 0.12.0
