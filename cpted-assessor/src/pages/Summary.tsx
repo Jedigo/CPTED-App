@@ -7,6 +7,7 @@ import {
   persistAllScores,
   getScoreColor,
   getScoreBgColor,
+  getScoreRowBgColor,
   getScoreLabel,
   getCompletionCounts,
 } from '../services/scoring';
@@ -338,7 +339,7 @@ export default function Summary() {
                     key={zs.id}
                     className={
                       zs.average_score !== null
-                        ? getScoreBgColor(zs.average_score)
+                        ? getScoreRowBgColor(zs.average_score)
                         : ''
                     }
                   >

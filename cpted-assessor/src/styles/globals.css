@@ -25,6 +25,12 @@
   --color-ink: #cdd6f4;
   --color-blue-pale: #11111b;
   --color-blue-light: #313244;
+
+  --color-score-critical: #F87171;
+  --color-score-deficient: #FB923C;
+  --color-score-adequate: #FACC15;
+  --color-score-good: #4ADE80;
+  --color-score-excellent: #34D399;
 }
 
 /* Base styles for iPad PWA */
