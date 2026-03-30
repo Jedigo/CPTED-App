@@ -249,10 +249,10 @@ This requires building a knowledge base mapping each of the 64 checklist items t
 
 ## Current Status
 
-**v0.15.0.** Christian Church assessment type added (8 zones, 71 items) alongside existing Catholic worship type. `isWorshipType()` helper for shared worship/church logic in PDF and forms. Item picker for manual recommendations/quick wins. Zone registry architecture maps PropertyType to zones/guidance. Dark mode, auto-explain deficient findings, auto-fence (residential only), PDF with dynamic titles/labels. Contact phone field added. Redeploy with `./deploy.sh`.
+**v0.15.1 deployed.** Christian Church assessment type (8 zones, 84 items) alongside Catholic worship type. `isWorshipType()` helper for shared worship/church logic. Separate `getScoreRowBgColor` for table rows vs badge pills. Brighter dark-mode score text colors. Item picker, zone registry, dark mode, auto-explain, auto-fence, dynamic PDF. Redeploy with `./deploy.sh`.
 
 **Remaining items / To-Do:**
-- Update server-side `pdf.ts` and zone data for worship assessments (server still residential-only)
+- Update server-side zone data + PDF for worship and Christian church assessments (server still residential-only)
 - Voice notes feature (planned)
 - Server-side report storage (planned)
 - Photo annotation — draw arrows/circles on captured photos to highlight issues
@@ -262,24 +262,6 @@ This requires building a knowledge base mapping each of the 64 checklist items t
 Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch: `main`)
 
 ## Session Log
-
-### 2026-02-16 — Dark Mode for Night Assessments
-- Added dark mode toggle (v0.10.0): semantic CSS tokens (`--color-surface`, `--color-ink`) + `.dark` class on `<html>`, persisted to localStorage
-- Created `ThemeContext.tsx`, `ThemeToggle.tsx`; replaced `bg-white`→`bg-surface`, `text-navy`→`text-ink`, `border-navy/`→`border-ink/` across 18 files
-- Headers, sidebar, score colors, and full-navy buttons unchanged — already dark
-- Deployed to server, pushed to GitHub
-
-### 2026-02-18 — PDF Logo, Deploy Fixes, Bug Fix
-- Added Volusia Sheriff badge logo to PDF cover page header (left side of navy bar) in both client and server PDF services
-- Text logo (`volusia_sheriff_text_transparent.png`) tested but removed — rendered poorly in jsPDF
-- Logos stored in: `logos/` (source), `cpted-assessor/public/logos/` (client fetch), `server/assets/logos/` (server fs.readFile)
-- Updated `server/Dockerfile` to `COPY assets/ ./assets/` so server-side PDF can access logos in Docker
-- Fixed SSH deploy: added host key for IP `100.91.180.116` to known_hosts (deploy.sh uses IP, not hostname)
-- Fixed SSH auth: server `~/.ssh/authorized_keys` permissions needed `chmod 600`
-- Deploy target confirmed: SSH user is `cpted` (not `cigo`), remote dir `/home/cpted/cpted-app/`
-- **Fixed clear signature bug**: `handleClear` in `SignaturePad.tsx` returned early when canvas ref was null (canvas not in DOM when showing saved signature image), preventing `setSigned(false)` and `onChange(null)` from firing
-- Updated memory files and todo list — all known bugs resolved
-- Next: voice notes feature, server-side report storage
 
 ### 2026-02-20 — Actionable Recommendations + PDF Quick Win Fix
 - Auto-generated recommendations and quick wins now include actionable fix text from `ITEM_GUIDANCE` knowledge base via new `buildDescription()` helper in `recommendations.ts`
@@ -304,3 +286,10 @@ Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch:
 - Exported `ScoredItemContext`, `getItemContext`, `buildDescription`, `getPriority` from `recommendations.ts` for reuse
 - Modified `RecommendationEditor.tsx` (new props: `itemScores`, `propertyType`) and `Summary.tsx` (passes props through)
 - Version: 0.14.0
+
+### 2026-03-30 — Christian Church Assessment Type + Score Readability Fix
+- Added `christian_church` PropertyType with 8 zones, 84 items — sourced from CISA, Sheepdog Church Security, Tri-Rivers Baptist, Church Production Magazine
+- Key differences from Catholic: stage/platform, sound booth/AV, baptistry, gymnasium, cafe/bookstore, youth ministry wing
+- Created `isWorshipType()` helper to share form/PDF logic between both worship types; renamed Catholic label to "Places of Worship (Catholic)"
+- Fixed Summary page score readability: separated `getScoreRowBgColor` (subtle 50% opacity tints for table rows) from `getScoreBgColor` (100-level tints for badge pills); added brighter dark-mode score text colors in globals.css
+- Version: 0.15.1
