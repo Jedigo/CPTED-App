@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { db } from '../db/database'
+import { isWorshipType } from '../data/zone-registry'
 import type { Assessment, AssessmentType, TimeOfAssessment } from '../types'
 
 interface Props {
@@ -24,7 +25,7 @@ export default function EditAssessmentInfo({ assessment, open, onClose }: Props)
   const [errors, setErrors] = useState<Record<string, boolean>>({})
   const [saving, setSaving] = useState(false)
 
-  const isWorship = assessment.property_type === 'places_of_worship'
+  const isWorship = isWorshipType(assessment.property_type)
 
   // Populate fields when modal opens
   useEffect(() => {

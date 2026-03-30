@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { db } from '../db/database';
-import { getZonesForType, getItemGuidanceForType } from '../data/zone-registry';
+import { getZonesForType, getItemGuidanceForType, isWorshipType } from '../data/zone-registry';
 import {
   getScoreLabel,
   getCompletionCounts,
@@ -50,7 +50,7 @@ function generateFilename(assessment: Assessment): string {
     .replace(/_+/g, '_')
     .substring(0, 40);
   const date = assessment.date_of_assessment || assessment.created_at.slice(0, 10);
-  const typePrefix = assessment.property_type === 'places_of_worship' ? 'CPTED_Worship' : 'CPTED_Assessment';
+  const typePrefix = isWorshipType(assessment.property_type) ? 'CPTED_Worship' : 'CPTED_Assessment';
   return `${typePrefix}_${addr}_${date}.pdf`;
 }
 
@@ -132,6 +132,8 @@ function getReportTitle(propertyType: PropertyType): string {
   switch (propertyType) {
     case 'places_of_worship':
       return 'CPTED Places of Worship Assessment';
+    case 'christian_church':
+      return 'CPTED Christian Church Assessment';
     default:
       return 'CPTED Residential Assessment';
   }
@@ -220,8 +222,8 @@ function renderCoverPage(doc: jsPDF, data: PDFData): void {
   const rightX = PAGE_WIDTH / 2 + 10;
   const lineHeight = 7;
 
-  const ownerLabel = pt === 'places_of_worship' ? 'Organization:' : 'Homeowner:';
-  const contactLabel = pt === 'places_of_worship' ? 'Contact Person:' : 'Contact:';
+  const ownerLabel = isWorshipType(pt) ? 'Organization:' : 'Homeowner:';
+  const contactLabel = isWorshipType(pt) ? 'Contact Person:' : 'Contact:';
   const metaItems: [string, string, number][] = [
     [ownerLabel, assessment.homeowner_name, leftX],
     ['Assessment Date:', formatDate(assessment.date_of_assessment), rightX],
@@ -310,7 +312,7 @@ function renderSummaryPage(doc: jsPDF, data: PDFData): void {
   const bestZones = scoredZones.filter((z) => z.score >= 4).slice(-2).reverse();
 
   const zoneCountWord = data.zones.length === 7 ? 'seven' : String(data.zones.length);
-  const typeLabel = data.assessment.property_type === 'places_of_worship' ? 'facility security' : 'residential security';
+  const typeLabel = isWorshipType(data.assessment.property_type) ? 'facility security' : 'residential security';
   let narrative = `This assessment evaluated ${data.assessment.address} across ${zoneCountWord} ${typeLabel} zones, covering ${totalScored} checklist items.`;
   if (overall !== null) {
     narrative += ` The property received an overall score of ${overall.toFixed(1)} (${getScoreLabel(overall)}).`;
@@ -781,7 +783,7 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
       doc.setFontSize(8);
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(80);
-      const strengthsIntro = pt === 'places_of_worship'
+      const strengthsIntro = isWorshipType(pt)
         ? 'Your facility demonstrates strong security practices in these areas:'
         : 'Your property demonstrates strong security practices in these areas:';
       doc.text(strengthsIntro, PAGE_MARGIN + 2, y);
@@ -873,7 +875,7 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(140);
       doc.text(
-        `${naItems.length} item${naItems.length === 1 ? '' : 's'} marked as not applicable to this ${pt === 'places_of_worship' ? 'facility' : 'property'}.`,
+        `${naItems.length} item${naItems.length === 1 ? '' : 's'} marked as not applicable to this ${isWorshipType(pt) ? 'facility' : 'property'}.`,
         PAGE_MARGIN,
         y,
       );

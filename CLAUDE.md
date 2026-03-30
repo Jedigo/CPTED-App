@@ -37,10 +37,12 @@ cpted-assessor/
 │   ├── App.tsx
 │   ├── data/
 │   │   ├── zones.ts              # Residential zone/checklist definitions
-│   │   ├── worship-zones.ts      # Worship zone/checklist definitions (8 zones, 70 items)
+│   │   ├── worship-zones.ts      # Catholic worship zone/checklist definitions (8 zones, 70 items)
+│   │   ├── christian-zones.ts    # Christian church zone/checklist definitions (8 zones, 84 items)
 │   │   ├── item-guidance.ts      # Residential CPTED guidance per item
-│   │   ├── worship-item-guidance.ts # Worship CPTED guidance per item
-│   │   └── zone-registry.ts      # getZonesForType() / getItemGuidanceForType() dispatcher
+│   │   ├── worship-item-guidance.ts # Catholic worship CPTED guidance per item
+│   │   ├── christian-item-guidance.ts # Christian church CPTED guidance per item
+│   │   └── zone-registry.ts      # getZonesForType() / getItemGuidanceForType() / isWorshipType() dispatcher
 │   ├── db/
 │   │   └── database.ts           # Dexie.js setup and schema
 │   ├── types/
@@ -179,7 +181,7 @@ The full checklist item text lives in `src/data/zones.ts`. Trimmed from 141 to 6
 4. Photos stored as **base64 data URL strings** in IndexedDB (NOT Blobs — Safari detaches Blob data from IndexedDB, making it unreadable)
 5. PDF must include the **liability waiver verbatim** (see project plan)
 6. PWA manifest app name: **"CPTED Assessor"**
-7. `property_type` supports `single_family_residential` and `places_of_worship` — add new types via zone registry
+7. `property_type` supports `single_family_residential`, `places_of_worship`, and `christian_church` — add new types via zone registry; use `isWorshipType()` helper for shared worship/church logic
 8. Timestamps: **local time for display**, stored as **ISO 8601 UTC** internally
 9. Photo capture should auto-grab **GPS coordinates and timestamp** from device
 10. **Version bumps are required** on every commit that changes app functionality. Bump the semver version in both `cpted-assessor/package.json` and the version display in `cpted-assessor/src/pages/Home.tsx`. Use patch for fixes, minor for features, major for breaking changes.
@@ -247,7 +249,7 @@ This requires building a knowledge base mapping each of the 64 checklist items t
 
 ## Current Status
 
-**v0.14.0 deployed.** Item picker for manual recommendations/quick wins. Places of Worship assessment type with 8 zones and 70 checklist items. Zone registry architecture maps PropertyType to zones/guidance. Dark mode, auto-explain deficient findings, auto-fence (residential only), PDF with dynamic titles/labels. Contact phone field added. Redeploy with `./deploy.sh`.
+**v0.15.0.** Christian Church assessment type added (8 zones, 71 items) alongside existing Catholic worship type. `isWorshipType()` helper for shared worship/church logic in PDF and forms. Item picker for manual recommendations/quick wins. Zone registry architecture maps PropertyType to zones/guidance. Dark mode, auto-explain deficient findings, auto-fence (residential only), PDF with dynamic titles/labels. Contact phone field added. Redeploy with `./deploy.sh`.
 
 **Remaining items / To-Do:**
 - Update server-side `pdf.ts` and zone data for worship assessments (server still residential-only)

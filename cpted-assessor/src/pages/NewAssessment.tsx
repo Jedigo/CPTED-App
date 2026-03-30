@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { v4 as uuidv4 } from 'uuid'
 import { db } from '../db/database'
-import { getZonesForType } from '../data/zone-registry'
+import { getZonesForType, isWorshipType } from '../data/zone-registry'
 import HeaderBackButton from '../components/HeaderBackButton'
 import ThemeToggle from '../components/ThemeToggle'
 import type {
@@ -207,13 +207,13 @@ export default function NewAssessment() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>
-                  {propertyType === 'places_of_worship' ? 'Organization Name' : 'Homeowner Name'} <span className="text-red-500">*</span>
+                  {isWorshipType(propertyType) ? 'Organization Name' : 'Homeowner Name'} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={homeownerName}
                   onChange={(e) => setHomeownerName(e.target.value)}
-                  placeholder={propertyType === 'places_of_worship' ? 'St. Mary Catholic Church' : 'Jane Smith'}
+                  placeholder={propertyType === 'places_of_worship' ? 'St. Mary Catholic Church' : propertyType === 'christian_church' ? 'Grace Community Church' : 'Jane Smith'}
                   className={inputClass('homeownerName')}
                 />
                 {errors.homeownerName && (
@@ -222,13 +222,13 @@ export default function NewAssessment() {
               </div>
               <div>
                 <label className={labelClass}>
-                  {propertyType === 'places_of_worship' ? 'Contact Person' : 'Homeowner Contact'}
+                  {isWorshipType(propertyType) ? 'Contact Person' : 'Homeowner Contact'}
                 </label>
                 <input
                   type="text"
                   value={homeownerContact}
                   onChange={(e) => setHomeownerContact(e.target.value)}
-                  placeholder={propertyType === 'places_of_worship' ? 'Fr. John Smith' : 'Name or email'}
+                  placeholder={propertyType === 'places_of_worship' ? 'Fr. John Smith' : isWorshipType(propertyType) ? 'Pastor John Smith' : 'Name or email'}
                   className={inputClass('homeownerContact')}
                 />
               </div>
@@ -256,7 +256,10 @@ export default function NewAssessment() {
                   Single Family Residential
                 </option>
                 <option value="places_of_worship">
-                  Places of Worship
+                  Places of Worship (Catholic)
+                </option>
+                <option value="christian_church">
+                  Christian Church
                 </option>
               </select>
             </div>
