@@ -13,6 +13,8 @@ import { WORSHIP_ZONES } from './worship-zones';
 import { WORSHIP_ITEM_GUIDANCE } from './worship-item-guidance';
 import { CHRISTIAN_ZONES } from './christian-zones';
 import { CHRISTIAN_ITEM_GUIDANCE } from './christian-item-guidance';
+import { TOWNHOME_ZONES } from './townhome-zones';
+import { TOWNHOME_ITEM_GUIDANCE } from './townhome-item-guidance';
 
 export function getZonesForType(propertyType: PropertyType): ZoneDefinition[] {
   switch (propertyType) {
@@ -20,6 +22,8 @@ export function getZonesForType(propertyType: PropertyType): ZoneDefinition[] {
       return WORSHIP_ZONES;
     case 'christian_church':
       return CHRISTIAN_ZONES;
+    case 'townhome':
+      return TOWNHOME_ZONES;
     case 'single_family_residential':
     default:
       return ZONES;
@@ -32,6 +36,8 @@ export function getItemGuidanceForType(propertyType: PropertyType): Map<string, 
       return WORSHIP_ITEM_GUIDANCE;
     case 'christian_church':
       return CHRISTIAN_ITEM_GUIDANCE;
+    case 'townhome':
+      return TOWNHOME_ITEM_GUIDANCE;
     case 'single_family_residential':
     default:
       return ITEM_GUIDANCE;
@@ -45,6 +51,8 @@ export function getPropertyTypeLabel(propertyType: PropertyType): string {
       return 'Places of Worship (Catholic)';
     case 'christian_church':
       return 'Christian Church';
+    case 'townhome':
+      return 'Townhome';
     case 'single_family_residential':
     default:
       return 'Single Family Residential';
@@ -54,4 +62,9 @@ export function getPropertyTypeLabel(propertyType: PropertyType): string {
 /** Returns true for any worship/church property type (not residential) */
 export function isWorshipType(propertyType: PropertyType): boolean {
   return propertyType === 'places_of_worship' || propertyType === 'christian_church';
+}
+
+/** Returns true for residential-style property types (single-family + townhome) */
+export function isResidentialType(propertyType: PropertyType): boolean {
+  return propertyType === 'single_family_residential' || propertyType === 'townhome';
 }

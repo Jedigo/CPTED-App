@@ -134,6 +134,8 @@ function getReportTitle(propertyType: PropertyType): string {
       return 'CPTED Places of Worship Assessment';
     case 'christian_church':
       return 'CPTED Christian Church Assessment';
+    case 'townhome':
+      return 'CPTED Townhome Assessment';
     default:
       return 'CPTED Residential Assessment';
   }

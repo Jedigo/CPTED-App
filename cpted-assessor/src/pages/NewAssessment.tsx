@@ -213,7 +213,7 @@ export default function NewAssessment() {
                   type="text"
                   value={homeownerName}
                   onChange={(e) => setHomeownerName(e.target.value)}
-                  placeholder={propertyType === 'places_of_worship' ? 'St. Mary Catholic Church' : propertyType === 'christian_church' ? 'Grace Community Church' : 'Jane Smith'}
+                  placeholder={propertyType === 'places_of_worship' ? 'St. Mary Catholic Church' : propertyType === 'christian_church' ? 'Grace Community Church' : propertyType === 'townhome' ? 'Jane Smith (Unit 4B)' : 'Jane Smith'}
                   className={inputClass('homeownerName')}
                 />
                 {errors.homeownerName && (
@@ -254,6 +254,9 @@ export default function NewAssessment() {
               >
                 <option value="single_family_residential">
                   Single Family Residential
+                </option>
+                <option value="townhome">
+                  Townhome
                 </option>
                 <option value="places_of_worship">
                   Places of Worship (Catholic)

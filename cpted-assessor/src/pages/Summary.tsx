@@ -7,7 +7,6 @@ import {
   persistAllScores,
   getScoreColor,
   getScoreBgColor,
-  getScoreRowBgColor,
   getScoreLabel,
   getCompletionCounts,
 } from '../services/scoring';
@@ -335,14 +334,7 @@ export default function Summary() {
               {(zoneScores || []).map((zs) => {
                 const counts = itemCountsByZone.get(zs.zone_key);
                 return (
-                  <tr
-                    key={zs.id}
-                    className={
-                      zs.average_score !== null
-                        ? getScoreRowBgColor(zs.average_score)
-                        : ''
-                    }
-                  >
+                  <tr key={zs.id}>
                     <td className="px-6 py-3 text-sm text-ink/50 font-mono">
                       {zs.zone_order}
                     </td>
@@ -352,7 +344,7 @@ export default function Summary() {
                     <td className="px-6 py-3 text-center">
                       {zs.average_score !== null ? (
                         <span
-                          className={`text-sm font-bold ${getScoreColor(zs.average_score)}`}
+                          className={`inline-block px-3 py-1 rounded-full text-sm font-bold ${getScoreBgColor(zs.average_score)} ${getScoreColor(zs.average_score)}`}
                         >
                           {zs.average_score.toFixed(1)}
                         </span>

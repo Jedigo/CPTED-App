@@ -2,12 +2,16 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/database';
 import ConfirmDialog from './ConfirmDialog';
+import PhotoMoveModal from './PhotoMoveModal';
+import { movePhoto } from '../services/photos';
 
 interface PhotoViewerProps {
   photoIds: string[];
   initialIndex: number;
   onClose: () => void;
   onDelete: (photoId: string) => void;
+  assessmentId?: string;
+  currentItemScoreId?: string;
 }
 
 export default function PhotoViewer({
@@ -15,10 +19,14 @@ export default function PhotoViewer({
   initialIndex,
   onClose,
   onDelete,
+  assessmentId,
+  currentItemScoreId,
 }: PhotoViewerProps) {
   const [index, setIndex] = useState(initialIndex);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showMove, setShowMove] = useState(false);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const canMove = !!assessmentId && !!currentItemScoreId;
 
   const currentId = photoIds[index];
   const photo = useLiveQuery(() => db.photos.get(currentId), [currentId]);
@@ -146,7 +154,17 @@ export default function PhotoViewer({
       </div>
 
       {/* Bottom bar */}
-      <div className="flex items-center justify-center gap-6 px-4 py-4 flex-shrink-0">
+      <div className="flex items-center justify-center gap-4 px-4 py-4 flex-shrink-0">
+        {canMove && (
+          <button
+            type="button"
+            onClick={() => setShowMove(true)}
+            className="px-5 py-2.5 rounded-xl bg-blue-medium hover:bg-blue-medium/80 text-white text-sm font-medium active:scale-95 transition-all"
+            aria-label="Move photo to another item"
+          >
+            Move to...
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setConfirmDelete(true)}
@@ -161,6 +179,20 @@ export default function PhotoViewer({
           </span>
         )}
       </div>
+
+      {/* Move modal */}
+      {canMove && (
+        <PhotoMoveModal
+          open={showMove}
+          assessmentId={assessmentId!}
+          currentItemScoreId={currentItemScoreId!}
+          onClose={() => setShowMove(false)}
+          onSelect={async (targetItemScoreId, targetZoneKey) => {
+            await movePhoto(currentId, currentItemScoreId!, targetItemScoreId, targetZoneKey);
+            setShowMove(false);
+          }}
+        />
+      )}
 
       {/* Delete confirmation */}
       <ConfirmDialog

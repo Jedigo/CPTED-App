@@ -12,9 +12,11 @@ import {
   type PullProgress,
 } from '../services/sync';
 import ConfirmDialog from '../components/ConfirmDialog';
+import DuplicateResultDialog from '../components/DuplicateResultDialog';
 import ServerAssessmentCard from '../components/ServerAssessmentCard';
 import ThemeToggle from '../components/ThemeToggle';
-import type { Assessment, AssessmentStatus } from '../types';
+import { duplicateAssessmentAs, type DuplicateResult } from '../services/duplicate';
+import type { Assessment, AssessmentStatus, PropertyType } from '../types';
 
 type FilterTab = 'all' | 'in_progress' | 'completed' | 'server';
 
@@ -36,6 +38,10 @@ export default function Home() {
   const [filter, setFilter] = useState<FilterTab>('all');
   const [deleteTarget, setDeleteTarget] = useState<Assessment | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [duplicateTarget, setDuplicateTarget] = useState<{ assessment: Assessment; targetType: PropertyType } | null>(null);
+  const [duplicating, setDuplicating] = useState(false);
+  const [duplicateResult, setDuplicateResult] = useState<DuplicateResult | null>(null);
+  const [duplicateTargetLabel, setDuplicateTargetLabel] = useState<string>('');
 
   // Server tab state
   const [serverAssessments, setServerAssessments] = useState<ServerAssessmentSummary[]>([]);
@@ -83,6 +89,25 @@ export default function Home() {
       updated_at: new Date().toISOString(),
     });
   }, []);
+
+  const handleDuplicate = useCallback(async () => {
+    if (!duplicateTarget) return;
+    setDuplicating(true);
+    try {
+      const result = await duplicateAssessmentAs(
+        duplicateTarget.assessment.id,
+        duplicateTarget.targetType,
+      );
+      setDuplicateTargetLabel(getPropertyTypeLabel(duplicateTarget.targetType));
+      setDuplicateResult(result);
+    } catch (err) {
+      console.error('Failed to duplicate assessment:', err);
+      alert(err instanceof Error ? err.message : 'Duplication failed');
+    } finally {
+      setDuplicating(false);
+      setDuplicateTarget(null);
+    }
+  }, [duplicateTarget]);
 
   const handleDelete = useCallback(async () => {
     if (!deleteTarget) return;
@@ -430,8 +455,8 @@ export default function Home() {
                   </button>
 
                   {/* Card footer actions */}
-                  <div className="border-t border-ink/5 px-5 py-2 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                  <div className="border-t border-ink/5 px-5 py-2 flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       {/* Show Mark Complete when 100% addressed and still in_progress */}
                       {assessment.status === 'in_progress' &&
                         counts &&
@@ -463,6 +488,18 @@ export default function Home() {
                           Reopen
                         </button>
                       )}
+                      {/* Duplicate (same type) */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDuplicateTarget({ assessment, targetType: assessment.property_type });
+                        }}
+                        className="text-xs font-semibold text-blue-700 hover:text-white hover:bg-blue-600 bg-blue-50 hover:border-blue-600 border border-blue-200 px-3 py-1.5 rounded-lg transition-colors"
+                        aria-label={`Duplicate assessment for ${assessment.address}`}
+                      >
+                        Duplicate
+                      </button>
                     </div>
                     <button
                       type="button"
@@ -522,7 +559,7 @@ export default function Home() {
       </div>
 
       {/* Version indicator */}
-      <p className="text-center text-[10px] text-ink/50 mt-6">v0.15.1</p>
+      <p className="text-center text-[10px] text-ink/50 mt-6">v0.18.1</p>
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog
@@ -548,6 +585,36 @@ export default function Home() {
         variant="default"
         onConfirm={() => overwriteTarget && handlePull(overwriteTarget)}
         onCancel={() => setOverwriteTarget(null)}
+      />
+
+      {/* Duplicate Confirmation Dialog */}
+      <ConfirmDialog
+        open={duplicateTarget !== null}
+        title="Duplicate Assessment"
+        message={
+          duplicateTarget
+            ? `Create a duplicate of "${duplicateTarget.assessment.address}"? The original is preserved. All scores and photos are carried over to the new copy.`
+            : ''
+        }
+        confirmLabel={duplicating ? 'Duplicating...' : 'Duplicate'}
+        variant="default"
+        onConfirm={handleDuplicate}
+        onCancel={() => setDuplicateTarget(null)}
+      />
+
+      {/* Duplicate Result Dialog */}
+      <DuplicateResultDialog
+        open={duplicateResult !== null}
+        result={duplicateResult}
+        targetTypeLabel={duplicateTargetLabel}
+        onClose={() => setDuplicateResult(null)}
+        onOpenNew={() => {
+          if (duplicateResult) {
+            const id = duplicateResult.newAssessmentId;
+            setDuplicateResult(null);
+            navigate(`/assessment/${id}`);
+          }
+        }}
       />
     </div>
   );

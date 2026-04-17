@@ -130,6 +130,8 @@ export default function ChecklistItem({
           initialIndex={viewerIndex}
           onClose={() => setViewerIndex(null)}
           onDelete={(photoId) => handleDeletePhoto(photoId)}
+          assessmentId={itemScore.assessment_id}
+          currentItemScoreId={itemScore.id}
         />
       )}
 

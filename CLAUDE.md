@@ -36,13 +36,16 @@ cpted-assessor/
 │   ├── main.tsx
 │   ├── App.tsx
 │   ├── data/
-│   │   ├── zones.ts              # Residential zone/checklist definitions
+│   │   ├── zones.ts              # Residential zone/checklist definitions (7 zones, 63 items)
+│   │   ├── townhome-zones.ts     # Townhome zone/checklist definitions (7 zones, ~67 items)
 │   │   ├── worship-zones.ts      # Catholic worship zone/checklist definitions (8 zones, 70 items)
 │   │   ├── christian-zones.ts    # Christian church zone/checklist definitions (8 zones, 84 items)
 │   │   ├── item-guidance.ts      # Residential CPTED guidance per item
+│   │   ├── townhome-item-guidance.ts # Townhome CPTED guidance — inherits from ITEM_GUIDANCE + overrides for new items
 │   │   ├── worship-item-guidance.ts # Catholic worship CPTED guidance per item
 │   │   ├── christian-item-guidance.ts # Christian church CPTED guidance per item
-│   │   └── zone-registry.ts      # getZonesForType() / getItemGuidanceForType() / isWorshipType() dispatcher
+│   │   ├── item-phases.ts        # Exterior/interior phase classification — INTERIOR_ITEMS set + getItemPhase()
+│   │   └── zone-registry.ts      # getZonesForType() / getItemGuidanceForType() / isWorshipType() / isResidentialType() dispatcher
 │   ├── db/
 │   │   └── database.ts           # Dexie.js setup and schema
 │   ├── types/
@@ -57,18 +60,22 @@ cpted-assessor/
 │   ├── components/
 │   │   ├── ThemeToggle.tsx        # Sun/moon dark mode toggle button
 │   │   ├── ItemPickerModal.tsx   # Pick scored items as recommendations/quick wins
-│   │   ├── ZoneSidebar.tsx       # Zone nav with completion indicators
-│   │   ├── ZoneView.tsx          # Active zone display
+│   │   ├── DuplicateResultDialog.tsx # Post-duplication summary (scores carried, photos re-homed)
+│   │   ├── PhotoMoveModal.tsx    # Re-assign a photo to any item in the assessment
+│   │   ├── ZoneSidebar.tsx       # Zone nav with completion indicators (phase-aware)
+│   │   ├── ZoneView.tsx          # Active zone display (phase-filtered; empty state)
 │   │   ├── PrincipleSection.tsx  # Collapsible principle with items
 │   │   ├── ChecklistItem.tsx     # Single item: score buttons + photo + notes
 │   │   ├── ScoreButtons.tsx      # [1][2][3][4][5][N/A] tap targets
 │   │   ├── PhotoCapture.tsx      # Camera integration
 │   │   ├── PhotoThumbnail.tsx    # Inline photo display
+│   │   ├── PhotoViewer.tsx       # Full-screen photo viewer with Move/Delete actions
 │   │   └── ZoneSummary.tsx       # Per-zone score summary box
 │   ├── services/
-│   │   ├── scoring.ts            # Score calculation logic
+│   │   ├── scoring.ts            # Score calculation logic (getScoreColor, getScoreBgColor)
 │   │   ├── pdf.ts                # PDF report generation
-│   │   └── photos.ts            # Photo capture, compression, storage
+│   │   ├── duplicate.ts          # Duplicate assessment across same or different property types
+│   │   └── photos.ts            # Photo capture, compression, storage, movePhoto()
 │   └── styles/
 │       └── globals.css           # Tailwind imports + custom styles
 ├── package.json
@@ -175,16 +182,17 @@ The full checklist item text lives in `src/data/zones.ts`. Trimmed from 141 to 6
 
 ## Critical Rules
 
-1. `zones.ts` and `worship-zones.ts` are the **source of truth** for checklist content; resolve via `zone-registry.ts`
+1. `zones.ts`, `townhome-zones.ts`, `worship-zones.ts`, `christian-zones.ts` are the **source of truth** for checklist content; resolve via `zone-registry.ts`
 2. Scoring is **1-5** (not 0-5) — no zero score exists
 3. **N/A items excluded** from all score calculations
 4. Photos stored as **base64 data URL strings** in IndexedDB (NOT Blobs — Safari detaches Blob data from IndexedDB, making it unreadable)
 5. PDF must include the **liability waiver verbatim** (see project plan)
 6. PWA manifest app name: **"CPTED Assessor"**
-7. `property_type` supports `single_family_residential`, `places_of_worship`, and `christian_church` — add new types via zone registry; use `isWorshipType()` helper for shared worship/church logic
+7. `property_type` supports `single_family_residential`, `townhome`, `places_of_worship`, and `christian_church` — add new types via zone registry; use `isWorshipType()` helper for worship/church logic and `isResidentialType()` for residential-style logic
 8. Timestamps: **local time for display**, stored as **ISO 8601 UTC** internally
 9. Photo capture should auto-grab **GPS coordinates and timestamp** from device
 10. **Version bumps are required** on every commit that changes app functionality. Bump the semver version in both `cpted-assessor/package.json` and the version display in `cpted-assessor/src/pages/Home.tsx`. Use patch for fixes, minor for features, major for breaking changes.
+11. **Townhome item text mirrors residential verbatim** where the CPTED concept is identical — this is what makes `duplicate.ts` carry scores and photos cleanly on type conversion. Only genuinely new items (Shared Boundaries zone, peephole, HOA-specific items) diverge.
 
 ## Liability Waiver (Verbatim — Do Not Modify)
 
@@ -249,27 +257,20 @@ This requires building a knowledge base mapping each of the 64 checklist items t
 
 ## Current Status
 
-**v0.15.1 deployed.** Christian Church assessment type (8 zones, 84 items) alongside Catholic worship type. `isWorshipType()` helper for shared worship/church logic. Separate `getScoreRowBgColor` for table rows vs badge pills. Brighter dark-mode score text colors. Item picker, zone registry, dark mode, auto-explain, auto-fence, dynamic PDF. Redeploy with `./deploy.sh`.
+**v0.18.1 deployed.** Townhome property type (7 zones, ~67 items) + generic `Duplicate` button that carries scores and photos across a residential↔townhome conversion via item-text match and zone remap. Photo move feature (re-assign any photo to any item). Exterior/Interior walkthrough phase filter in the Assessment screen (persisted in localStorage). Summary zone rows use colored badge pills instead of row tints. Redeploy with `./deploy.sh`.
 
 **Remaining items / To-Do:**
-- Update server-side zone data + PDF for worship and Christian church assessments (server still residential-only)
+- Update server-side zone data + PDF for townhome, worship, and Christian church assessments (server still residential-only)
 - Voice notes feature (planned)
 - Server-side report storage (planned)
 - Photo annotation — draw arrows/circles on captured photos to highlight issues
 - Replace PWA icon SVG placeholders with proper PNGs
 - Fix dark mode for disabled/N/A states (bg-gray-50 not dark-aware)
+- Review phase classifications for worship/church items as field usage reveals mis-tags
 
 Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch: `main`)
 
 ## Session Log
-
-### 2026-02-20 — Actionable Recommendations + PDF Quick Win Fix
-- Auto-generated recommendations and quick wins now include actionable fix text from `ITEM_GUIDANCE` knowledge base via new `buildDescription()` helper in `recommendations.ts`
-- Format: "Zone — Principle: Item text\n\nRecommended action: {improvement text}"
-- Fixed PDF quick win rendering: `renderQuickWinItem` used fixed 12mm spacing causing text overlap with longer descriptions — now returns dynamic height like `renderRecommendationItem`
-- RecommendationEditor textarea increased from 2 to 4 rows to accommodate longer descriptions
-- Created project to-do list with 7 items: voice notes, server-side reports, PWA icons, dark mode N/A fix, photo annotation, item picker for manual recs
-- Version: 0.11.1
 
 ### 2026-02-26 — Places of Worship Assessment Type
 - Added `places_of_worship` PropertyType with 8 zones (70 checklist items) including Catholic-specific items (sacristy, tabernacle, altar/chancel)
@@ -293,3 +294,11 @@ Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch:
 - Created `isWorshipType()` helper to share form/PDF logic between both worship types; renamed Catholic label to "Places of Worship (Catholic)"
 - Fixed Summary page score readability: separated `getScoreRowBgColor` (subtle 50% opacity tints for table rows) from `getScoreBgColor` (100-level tints for badge pills); added brighter dark-mode score text colors in globals.css
 - Version: 0.15.1
+
+### 2026-04-17 — Townhome Type + Duplicate/Move Photos + Walkthrough Phase Filter
+- Added `townhome` PropertyType with 7 zones, ~67 items. New "Shared Boundaries" zone replaces Side Yards for attached housing (shared walls, breezeways, HOA utilities). Townhome item text mirrors residential verbatim where CPTED concept is identical so duplicate carries state cleanly. New files: `townhome-zones.ts`, `townhome-item-guidance.ts`; added `isResidentialType()` helper.
+- Built `services/duplicate.ts` — clones an assessment with new UUIDs, matches items by `zone_key+principle+item_text` with a residential↔townhome zone remap. Unmatched photos fall back to the first item in the mapped target zone (no photo loss). `DuplicateResultDialog.tsx` shows stats + re-homed photos list. Generic "Duplicate" button on Home (originally "Duplicate as Townhome", widened for re-assessment/fix use cases).
+- Added `PhotoMoveModal.tsx` + `movePhoto()` service. "Move to…" button in PhotoViewer re-assigns any photo to any item in the assessment — the correct fix for photos that landed in a fallback zone after duplication.
+- Added exterior/interior walkthrough phase filter. `item-phases.ts` classifies each item text via an `INTERIOR_ITEMS` Set + `getItemPhase()` helper. Three-way toggle in the Assessment main area drives `ZoneView` item visibility and `ZoneSidebar` completion dots. Persisted in `localStorage('cpted-phase-filter')`.
+- Replaced Summary zone-row tint with a colored badge pill for the Avg Score cell; removed unused `getScoreRowBgColor` from `scoring.ts`.
+- Versions shipped: 0.16.0, 0.16.1, 0.16.2, 0.17.0, 0.18.0, 0.18.1

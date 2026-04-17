@@ -139,3 +139,38 @@ export async function deletePhoto(
     }
   });
 }
+
+/**
+ * Move a photo from one ItemScore to another (possibly in a different zone).
+ * Updates the photo record and both item_scores' photo_ids arrays atomically.
+ */
+export async function movePhoto(
+  photoId: string,
+  fromItemScoreId: string,
+  toItemScoreId: string,
+  toZoneKey: string,
+): Promise<void> {
+  if (fromItemScoreId === toItemScoreId) return;
+
+  await db.transaction('rw', db.photos, db.item_scores, async () => {
+    await db.photos.update(photoId, {
+      item_score_id: toItemScoreId,
+      zone_key: toZoneKey,
+      synced: false,
+    });
+
+    const fromItem = await db.item_scores.get(fromItemScoreId);
+    if (fromItem) {
+      await db.item_scores.update(fromItemScoreId, {
+        photo_ids: fromItem.photo_ids.filter((id) => id !== photoId),
+      });
+    }
+
+    const toItem = await db.item_scores.get(toItemScoreId);
+    if (toItem && !toItem.photo_ids.includes(photoId)) {
+      await db.item_scores.update(toItemScoreId, {
+        photo_ids: [...toItem.photo_ids, photoId],
+      });
+    }
+  });
+}

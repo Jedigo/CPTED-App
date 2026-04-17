@@ -4,7 +4,18 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/database';
 import { getZonesForType } from '../data/zone-registry';
+import { getItemPhase, type Phase } from '../data/item-phases';
 import type { ItemScore } from '../types';
+
+type PhaseFilter = 'all' | Phase;
+const PHASE_STORAGE_KEY = 'cpted-phase-filter';
+
+function loadPhaseFilter(): PhaseFilter {
+  if (typeof window === 'undefined') return 'all';
+  const stored = window.localStorage.getItem(PHASE_STORAGE_KEY);
+  if (stored === 'exterior' || stored === 'interior' || stored === 'all') return stored;
+  return 'all';
+}
 import { persistZoneScore, persistOverallScore, persistAllScores } from '../services/scoring';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import ZoneSidebar from '../components/ZoneSidebar';
@@ -21,6 +32,14 @@ export default function Assessment() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [scoreRefOpen, setScoreRefOpen] = useState(false);
   const [editInfoOpen, setEditInfoOpen] = useState(false);
+  const [phaseFilter, setPhaseFilter] = useState<PhaseFilter>(loadPhaseFilter);
+
+  const handlePhaseChange = useCallback((next: PhaseFilter) => {
+    setPhaseFilter(next);
+    try {
+      window.localStorage.setItem(PHASE_STORAGE_KEY, next);
+    } catch { /* ignore */ }
+  }, []);
   const mainRef = useRef<HTMLDivElement>(null);
   const initRef = useRef(false);
   const persistTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
@@ -100,11 +119,17 @@ export default function Assessment() {
     mainRef.current?.scrollTo(0, 0);
   }, [activeZoneKey]);
 
-  // Group item scores by zone key
+  // Filter item scores by active phase
+  const phaseFilteredScores = useMemo(() => {
+    if (!itemScores) return [];
+    if (phaseFilter === 'all') return itemScores;
+    return itemScores.filter((s) => getItemPhase(s.item_text) === phaseFilter);
+  }, [itemScores, phaseFilter]);
+
+  // Group filtered item scores by zone key (drives ZoneView + ZoneSidebar dots)
   const itemScoresByZone = useMemo(() => {
     const map = new Map<string, ItemScore[]>();
-    if (!itemScores) return map;
-    for (const score of itemScores) {
+    for (const score of phaseFilteredScores) {
       const list = map.get(score.zone_key);
       if (list) {
         list.push(score);
@@ -113,7 +138,7 @@ export default function Assessment() {
       }
     }
     return map;
-  }, [itemScores]);
+  }, [phaseFilteredScores]);
 
   const activeZone = zones.find((z) => z.key === activeZoneKey);
   const activeZoneIndex = zones.findIndex((z) => z.key === activeZoneKey);
@@ -278,9 +303,43 @@ export default function Assessment() {
         </div>
 
         <main ref={mainRef} className="flex-1 overflow-y-auto p-6">
+          {/* Phase filter */}
+          <div className="mb-4 flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-semibold uppercase tracking-wide text-ink/50">
+              Walkthrough phase
+            </span>
+            <div className="inline-flex rounded-lg border border-ink/15 bg-surface p-0.5 shadow-sm">
+              {(['all', 'exterior', 'interior'] as const).map((opt) => {
+                const active = phaseFilter === opt;
+                const label = opt === 'all' ? 'All' : opt === 'exterior' ? 'Exterior' : 'Interior';
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => handlePhaseChange(opt)}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                      active
+                        ? 'bg-navy text-white shadow-sm'
+                        : 'text-ink/60 hover:text-ink hover:bg-ink/5'
+                    }`}
+                    aria-pressed={active}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            {phaseFilter !== 'all' && (
+              <span className="text-xs text-ink/50">
+                Showing {phaseFilter} items only
+              </span>
+            )}
+          </div>
+
           <ZoneView
             zone={activeZone}
             itemScores={activeItemScores}
+            phaseFilter={phaseFilter}
             onScoreChange={handleScoreChange}
             onNotesChange={handleNotesChange}
           />
