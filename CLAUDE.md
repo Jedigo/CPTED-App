@@ -40,12 +40,14 @@ cpted-assessor/
 │   │   ├── townhome-zones.ts     # Townhome zone/checklist definitions (7 zones, ~67 items)
 │   │   ├── worship-zones.ts      # Catholic worship zone/checklist definitions (8 zones, 70 items)
 │   │   ├── christian-zones.ts    # Christian church zone/checklist definitions (8 zones, 84 items)
+│   │   ├── school-zones.ts       # School zone/checklist (10 zones) — single template with band tags, exports ELEMENTARY/MIDDLE/HIGH/COMBINED
 │   │   ├── item-guidance.ts      # Residential CPTED guidance per item
 │   │   ├── townhome-item-guidance.ts # Townhome CPTED guidance — inherits from ITEM_GUIDANCE + overrides for new items
 │   │   ├── worship-item-guidance.ts # Catholic worship CPTED guidance per item
 │   │   ├── christian-item-guidance.ts # Christian church CPTED guidance per item
+│   │   ├── school-item-guidance.ts # School CPTED guidance — shared across all 4 school types
 │   │   ├── item-phases.ts        # Exterior/interior phase classification — INTERIOR_ITEMS set + getItemPhase()
-│   │   └── zone-registry.ts      # getZonesForType() / getItemGuidanceForType() / isWorshipType() / isResidentialType() dispatcher
+│   │   └── zone-registry.ts      # getZonesForType() / getItemGuidanceForType() / isWorshipType() / isResidentialType() / isSchoolType() dispatcher
 │   ├── db/
 │   │   └── database.ts           # Dexie.js setup and schema
 │   ├── types/
@@ -188,7 +190,7 @@ The full checklist item text lives in `src/data/zones.ts`. Trimmed from 141 to 6
 4. Photos stored as **base64 data URL strings** in IndexedDB (NOT Blobs — Safari detaches Blob data from IndexedDB, making it unreadable)
 5. PDF must include the **liability waiver verbatim** (see project plan)
 6. PWA manifest app name: **"CPTED Assessor"**
-7. `property_type` supports `single_family_residential`, `townhome`, `places_of_worship`, and `christian_church` — add new types via zone registry; use `isWorshipType()` helper for worship/church logic and `isResidentialType()` for residential-style logic
+7. `property_type` supports `single_family_residential`, `townhome`, `places_of_worship`, `christian_church`, `elementary_school`, `middle_school`, `high_school`, and `combined_school` — add new types via zone registry; use `isWorshipType()`, `isResidentialType()`, and `isSchoolType()` helpers instead of enumerating cases
 8. Timestamps: **local time for display**, stored as **ISO 8601 UTC** internally
 9. Photo capture should auto-grab **GPS coordinates and timestamp** from device
 10. **Version bumps are required** on every commit that changes app functionality. Bump the semver version in both `cpted-assessor/package.json` and the version display in `cpted-assessor/src/pages/Home.tsx`. Use patch for fixes, minor for features, major for breaking changes.
@@ -257,10 +259,10 @@ This requires building a knowledge base mapping each of the 64 checklist items t
 
 ## Current Status
 
-**v0.18.1 deployed.** Townhome property type (7 zones, ~67 items) + generic `Duplicate` button that carries scores and photos across a residential↔townhome conversion via item-text match and zone remap. Photo move feature (re-assign any photo to any item). Exterior/Interior walkthrough phase filter in the Assessment screen (persisted in localStorage). Summary zone rows use colored badge pills instead of row tints. Redeploy with `./deploy.sh`.
+**v0.19.1 deployed.** Added school CPTED assessment types for summer field deployment: Elementary (140 items), Middle (146 items), High (148 items), and Combined K-8/K-12 (150 items) — all 10 zones per type. Single `school-zones.ts` template with band-tagged items generates all 4 type variants; shared `school-item-guidance.ts` covers every item with CPTED standard + improvement guidance (100% coverage). Sources: Volusia Sheriff CPTED school eval, CISA K-12 3rd ed., PASS 7th ed., CDC CSA, and Florida statute (Alyssa's Law, HB 301, MSD Act, HB 1421). `isSchoolType()` helper added to registry. Form + PDF updated with school-specific labels (School Name / Principal / Main Office Phone). Walkthrough phase filter tagged for all school interior items. 0.19.1 patch: corrected 3ft→2ft in the CPTED landscape rule (2'/6' rule). Redeploy with `./deploy.sh`.
 
 **Remaining items / To-Do:**
-- Update server-side zone data + PDF for townhome, worship, and Christian church assessments (server still residential-only)
+- Update server-side zone data + PDF for townhome, worship, Christian church, and school assessments (server still residential-only)
 - Voice notes feature (planned)
 - Server-side report storage (planned)
 - Photo annotation — draw arrows/circles on captured photos to highlight issues
@@ -271,15 +273,6 @@ This requires building a knowledge base mapping each of the 64 checklist items t
 Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch: `main`)
 
 ## Session Log
-
-### 2026-02-26 — Places of Worship Assessment Type
-- Added `places_of_worship` PropertyType with 8 zones (70 checklist items) including Catholic-specific items (sacristy, tabernacle, altar/chancel)
-- Created zone registry architecture: `zone-registry.ts` dispatches zones and item guidance by property type
-- New files: `worship-zones.ts`, `worship-item-guidance.ts`, `zone-registry.ts`
-- Modified 9 files: types, NewAssessment (property type dropdown + dynamic labels), Assessment, ZoneSidebar (zones prop), Summary, recommendations (propertyType param, fence skip for non-residential), pdf (dynamic titles/footer/labels/descriptions), Home (property type badge)
-- Added `contact_phone` field to Assessment type, form, and PDF
-- Fixed race condition: worship assessments stuck on loading spinner because zones defaulted to residential before assessment loaded
-- Version: 0.12.0
 
 ### 2026-02-26 — Item Picker for Manual Recommendations/Quick Wins
 - Added "Pick from Items" button to RecommendationEditor — opens modal showing all scored checklist items grouped by zone
@@ -294,6 +287,16 @@ Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch:
 - Created `isWorshipType()` helper to share form/PDF logic between both worship types; renamed Catholic label to "Places of Worship (Catholic)"
 - Fixed Summary page score readability: separated `getScoreRowBgColor` (subtle 50% opacity tints for table rows) from `getScoreBgColor` (100-level tints for badge pills); added brighter dark-mode score text colors in globals.css
 - Version: 0.15.1
+
+### 2026-04-20 — School CPTED Types (Elementary / Middle / High / Combined)
+- Added 4 school `PropertyType` variants. Motivation: Volusia summer 2026 field season — SROs need a dedicated school template, not residential-adapted.
+- New files: `src/data/school-zones.ts` (10-zone template with `SchoolBand` item tags, builder produces `ELEMENTARY_SCHOOL_ZONES`, `MIDDLE_SCHOOL_ZONES`, `HIGH_SCHOOL_ZONES`, `COMBINED_SCHOOL_ZONES`), `src/data/school-item-guidance.ts` (150 items × standard+improvement).
+- Zones: Campus Perimeter & Approach · Parking, Drop-off & Bus Loops · Grounds, Playgrounds & Outdoor · Building Exterior & Public Entry · Reception, Visitor Mgmt & Admin · Interior Corridors, Stairs & Lobbies · Classrooms & Instructional · Assembly & Support · Restrooms & Utility · Safety Systems, Policies & Emergency Readiness.
+- Florida statute items folded in: Alyssa's Law MPAS (PSAP-integrated), HB 301 digital mapping, MSD Act Threat Assessment Team, HB 1421 campus hardening (fortified vestibule, ballistic glazing, interior-lockable classroom doors, exterior-visible classroom numbering), SRO/Guardian coverage, FortifyFL, School Safety Specialist. Item counts: elementary 140, middle 146, high 148, combined 150.
+- Band tagging: student parking lot + CTE labs are `high/combined` only; playground items are `elementary/combined` only; locker rooms + lockers + auditorium backstage are `middle/high/combined`. Unfiltered items apply to all bands so duplicate across school types carries state cleanly.
+- Wired `zone-registry.ts` with all 4 types + `isSchoolType()` helper. Updated `NewAssessment.tsx` (optgroup-grouped dropdown, School Name / Principal / Main Office Phone labels), `EditAssessmentInfo.tsx` (same dynamic labels), `pdf.ts` (per-type report title, school ownerLabel/contactLabel/filename prefix, school-aware narrative text). `item-phases.ts` gained ~70 school interior items so the walkthrough phase filter works properly.
+- Fence auto-rec already guarded to residential-only — no school code path needed. `maintenance` principle is used across all school zones, so quick-wins generator picks up maintenance items organically.
+- Deployed 0.19.0, then patched to 0.19.1 correcting "3ft" → "2ft" in the CPTED landscape rule (2'/6' rule — shrubs below 2 ft, canopies above 6 ft) to match residential code. Source doc: `files(1)/CPTED SCHOOL EVAL.docx` (Volusia Sheriff format, San Benito HS example). Typecheck + production build pass clean.
 
 ### 2026-04-17 — Townhome Type + Duplicate/Move Photos + Walkthrough Phase Filter
 - Added `townhome` PropertyType with 7 zones, ~67 items. New "Shared Boundaries" zone replaces Side Yards for attached housing (shared walls, breezeways, HOA utilities). Townhome item text mirrors residential verbatim where CPTED concept is identical so duplicate carries state cleanly. New files: `townhome-zones.ts`, `townhome-item-guidance.ts`; added `isResidentialType()` helper.

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { v4 as uuidv4 } from 'uuid'
 import { db } from '../db/database'
-import { getZonesForType, isWorshipType } from '../data/zone-registry'
+import { getZonesForType, isWorshipType, isSchoolType } from '../data/zone-registry'
 import HeaderBackButton from '../components/HeaderBackButton'
 import ThemeToggle from '../components/ThemeToggle'
 import type {
@@ -207,13 +207,23 @@ export default function NewAssessment() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>
-                  {isWorshipType(propertyType) ? 'Organization Name' : 'Homeowner Name'} <span className="text-red-500">*</span>
+                  {isSchoolType(propertyType) ? 'School Name' : isWorshipType(propertyType) ? 'Organization Name' : 'Homeowner Name'} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={homeownerName}
                   onChange={(e) => setHomeownerName(e.target.value)}
-                  placeholder={propertyType === 'places_of_worship' ? 'St. Mary Catholic Church' : propertyType === 'christian_church' ? 'Grace Community Church' : propertyType === 'townhome' ? 'Jane Smith (Unit 4B)' : 'Jane Smith'}
+                  placeholder={
+                    isSchoolType(propertyType)
+                      ? 'Spruce Creek High School'
+                      : propertyType === 'places_of_worship'
+                        ? 'St. Mary Catholic Church'
+                        : propertyType === 'christian_church'
+                          ? 'Grace Community Church'
+                          : propertyType === 'townhome'
+                            ? 'Jane Smith (Unit 4B)'
+                            : 'Jane Smith'
+                  }
                   className={inputClass('homeownerName')}
                 />
                 {errors.homeownerName && (
@@ -222,20 +232,30 @@ export default function NewAssessment() {
               </div>
               <div>
                 <label className={labelClass}>
-                  {isWorshipType(propertyType) ? 'Contact Person' : 'Homeowner Contact'}
+                  {isSchoolType(propertyType) ? 'Principal / Contact Person' : isWorshipType(propertyType) ? 'Contact Person' : 'Homeowner Contact'}
                 </label>
                 <input
                   type="text"
                   value={homeownerContact}
                   onChange={(e) => setHomeownerContact(e.target.value)}
-                  placeholder={propertyType === 'places_of_worship' ? 'Fr. John Smith' : isWorshipType(propertyType) ? 'Pastor John Smith' : 'Name or email'}
+                  placeholder={
+                    isSchoolType(propertyType)
+                      ? 'Principal Jane Doe'
+                      : propertyType === 'places_of_worship'
+                        ? 'Fr. John Smith'
+                        : isWorshipType(propertyType)
+                          ? 'Pastor John Smith'
+                          : 'Name or email'
+                  }
                   className={inputClass('homeownerContact')}
                 />
               </div>
             </div>
 
             <div>
-              <label className={labelClass}>Contact Phone</label>
+              <label className={labelClass}>
+                {isSchoolType(propertyType) ? 'Main Office Phone' : 'Contact Phone'}
+              </label>
               <input
                 type="tel"
                 value={contactPhone}
@@ -252,18 +272,36 @@ export default function NewAssessment() {
                 onChange={(e) => setPropertyType(e.target.value as PropertyType)}
                 className="w-full rounded-lg border border-ink/20 px-4 py-3 text-base bg-surface outline-none focus:border-blue-medium focus:ring-2 focus:ring-blue-medium/30"
               >
-                <option value="single_family_residential">
-                  Single Family Residential
-                </option>
-                <option value="townhome">
-                  Townhome
-                </option>
-                <option value="places_of_worship">
-                  Places of Worship (Catholic)
-                </option>
-                <option value="christian_church">
-                  Christian Church
-                </option>
+                <optgroup label="Residential">
+                  <option value="single_family_residential">
+                    Single Family Residential
+                  </option>
+                  <option value="townhome">
+                    Townhome
+                  </option>
+                </optgroup>
+                <optgroup label="Places of Worship">
+                  <option value="places_of_worship">
+                    Places of Worship (Catholic)
+                  </option>
+                  <option value="christian_church">
+                    Christian Church
+                  </option>
+                </optgroup>
+                <optgroup label="Schools">
+                  <option value="elementary_school">
+                    Elementary School (K-5)
+                  </option>
+                  <option value="middle_school">
+                    Middle School (6-8)
+                  </option>
+                  <option value="high_school">
+                    High School (9-12)
+                  </option>
+                  <option value="combined_school">
+                    Combined School (K-8 / K-12)
+                  </option>
+                </optgroup>
               </select>
             </div>
           </div>

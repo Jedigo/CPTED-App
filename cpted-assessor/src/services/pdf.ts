@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { db } from '../db/database';
-import { getZonesForType, getItemGuidanceForType, isWorshipType } from '../data/zone-registry';
+import { getZonesForType, getItemGuidanceForType, isWorshipType, isSchoolType } from '../data/zone-registry';
 import {
   getScoreLabel,
   getCompletionCounts,
@@ -50,7 +50,11 @@ function generateFilename(assessment: Assessment): string {
     .replace(/_+/g, '_')
     .substring(0, 40);
   const date = assessment.date_of_assessment || assessment.created_at.slice(0, 10);
-  const typePrefix = isWorshipType(assessment.property_type) ? 'CPTED_Worship' : 'CPTED_Assessment';
+  const typePrefix = isSchoolType(assessment.property_type)
+    ? 'CPTED_School'
+    : isWorshipType(assessment.property_type)
+      ? 'CPTED_Worship'
+      : 'CPTED_Assessment';
   return `${typePrefix}_${addr}_${date}.pdf`;
 }
 
@@ -136,6 +140,14 @@ function getReportTitle(propertyType: PropertyType): string {
       return 'CPTED Christian Church Assessment';
     case 'townhome':
       return 'CPTED Townhome Assessment';
+    case 'elementary_school':
+      return 'CPTED Elementary School Assessment';
+    case 'middle_school':
+      return 'CPTED Middle School Assessment';
+    case 'high_school':
+      return 'CPTED High School Assessment';
+    case 'combined_school':
+      return 'CPTED Combined School Assessment';
     default:
       return 'CPTED Residential Assessment';
   }
@@ -224,8 +236,16 @@ function renderCoverPage(doc: jsPDF, data: PDFData): void {
   const rightX = PAGE_WIDTH / 2 + 10;
   const lineHeight = 7;
 
-  const ownerLabel = isWorshipType(pt) ? 'Organization:' : 'Homeowner:';
-  const contactLabel = isWorshipType(pt) ? 'Contact Person:' : 'Contact:';
+  const ownerLabel = isSchoolType(pt)
+    ? 'School:'
+    : isWorshipType(pt)
+      ? 'Organization:'
+      : 'Homeowner:';
+  const contactLabel = isSchoolType(pt)
+    ? 'Principal / Contact:'
+    : isWorshipType(pt)
+      ? 'Contact Person:'
+      : 'Contact:';
   const metaItems: [string, string, number][] = [
     [ownerLabel, assessment.homeowner_name, leftX],
     ['Assessment Date:', formatDate(assessment.date_of_assessment), rightX],
@@ -313,8 +333,12 @@ function renderSummaryPage(doc: jsPDF, data: PDFData): void {
   const worstZones = scoredZones.filter((z) => z.score < 3).slice(0, 2);
   const bestZones = scoredZones.filter((z) => z.score >= 4).slice(-2).reverse();
 
-  const zoneCountWord = data.zones.length === 7 ? 'seven' : String(data.zones.length);
-  const typeLabel = isWorshipType(data.assessment.property_type) ? 'facility security' : 'residential security';
+  const zoneCountWord = data.zones.length === 7 ? 'seven' : data.zones.length === 8 ? 'eight' : data.zones.length === 10 ? 'ten' : String(data.zones.length);
+  const typeLabel = isSchoolType(data.assessment.property_type)
+    ? 'school security'
+    : isWorshipType(data.assessment.property_type)
+      ? 'facility security'
+      : 'residential security';
   let narrative = `This assessment evaluated ${data.assessment.address} across ${zoneCountWord} ${typeLabel} zones, covering ${totalScored} checklist items.`;
   if (overall !== null) {
     narrative += ` The property received an overall score of ${overall.toFixed(1)} (${getScoreLabel(overall)}).`;
@@ -785,9 +809,11 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
       doc.setFontSize(8);
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(80);
-      const strengthsIntro = isWorshipType(pt)
-        ? 'Your facility demonstrates strong security practices in these areas:'
-        : 'Your property demonstrates strong security practices in these areas:';
+      const strengthsIntro = isSchoolType(pt)
+        ? 'This school demonstrates strong security practices in these areas:'
+        : isWorshipType(pt)
+          ? 'Your facility demonstrates strong security practices in these areas:'
+          : 'Your property demonstrates strong security practices in these areas:';
       doc.text(strengthsIntro, PAGE_MARGIN + 2, y);
       y += 5;
 
@@ -877,7 +903,7 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(140);
       doc.text(
-        `${naItems.length} item${naItems.length === 1 ? '' : 's'} marked as not applicable to this ${isWorshipType(pt) ? 'facility' : 'property'}.`,
+        `${naItems.length} item${naItems.length === 1 ? '' : 's'} marked as not applicable to this ${isSchoolType(pt) ? 'school' : isWorshipType(pt) ? 'facility' : 'property'}.`,
         PAGE_MARGIN,
         y,
       );
