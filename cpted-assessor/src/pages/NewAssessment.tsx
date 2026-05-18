@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { v4 as uuidv4 } from 'uuid'
 import { db } from '../db/database'
-import { getZonesForType, isWorshipType, isSchoolType } from '../data/zone-registry'
+import { getZonesForType, isWorshipType, isSchoolType, isCommercialType } from '../data/zone-registry'
 import HeaderBackButton from '../components/HeaderBackButton'
 import ThemeToggle from '../components/ThemeToggle'
 import type {
@@ -207,7 +207,13 @@ export default function NewAssessment() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>
-                  {isSchoolType(propertyType) ? 'School Name' : isWorshipType(propertyType) ? 'Organization Name' : 'Homeowner Name'} <span className="text-red-500">*</span>
+                  {isSchoolType(propertyType)
+                    ? 'School Name'
+                    : isCommercialType(propertyType)
+                      ? 'Company Name'
+                      : isWorshipType(propertyType)
+                        ? 'Organization Name'
+                        : 'Homeowner Name'} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -216,13 +222,15 @@ export default function NewAssessment() {
                   placeholder={
                     isSchoolType(propertyType)
                       ? 'Spruce Creek High School'
-                      : propertyType === 'places_of_worship'
-                        ? 'St. Mary Catholic Church'
-                        : propertyType === 'christian_church'
-                          ? 'Grace Community Church'
-                          : propertyType === 'townhome'
-                            ? 'Jane Smith (Unit 4B)'
-                            : 'Jane Smith'
+                      : isCommercialType(propertyType)
+                        ? 'Acme Insurance Company'
+                        : propertyType === 'places_of_worship'
+                          ? 'St. Mary Catholic Church'
+                          : propertyType === 'christian_church'
+                            ? 'Grace Community Church'
+                            : propertyType === 'townhome'
+                              ? 'Jane Smith (Unit 4B)'
+                              : 'Jane Smith'
                   }
                   className={inputClass('homeownerName')}
                 />
@@ -232,7 +240,13 @@ export default function NewAssessment() {
               </div>
               <div>
                 <label className={labelClass}>
-                  {isSchoolType(propertyType) ? 'Principal / Contact Person' : isWorshipType(propertyType) ? 'Contact Person' : 'Homeowner Contact'}
+                  {isSchoolType(propertyType)
+                    ? 'Principal / Contact Person'
+                    : isCommercialType(propertyType)
+                      ? 'Facilities or Security Director'
+                      : isWorshipType(propertyType)
+                        ? 'Contact Person'
+                        : 'Homeowner Contact'}
                 </label>
                 <input
                   type="text"
@@ -241,11 +255,13 @@ export default function NewAssessment() {
                   placeholder={
                     isSchoolType(propertyType)
                       ? 'Principal Jane Doe'
-                      : propertyType === 'places_of_worship'
-                        ? 'Fr. John Smith'
-                        : isWorshipType(propertyType)
-                          ? 'Pastor John Smith'
-                          : 'Name or email'
+                      : isCommercialType(propertyType)
+                        ? 'Director of Security'
+                        : propertyType === 'places_of_worship'
+                          ? 'Fr. John Smith'
+                          : isWorshipType(propertyType)
+                            ? 'Pastor John Smith'
+                            : 'Name or email'
                   }
                   className={inputClass('homeownerContact')}
                 />
@@ -254,7 +270,7 @@ export default function NewAssessment() {
 
             <div>
               <label className={labelClass}>
-                {isSchoolType(propertyType) ? 'Main Office Phone' : 'Contact Phone'}
+                {isSchoolType(propertyType) || isCommercialType(propertyType) ? 'Main Office Phone' : 'Contact Phone'}
               </label>
               <input
                 type="tel"
@@ -300,6 +316,11 @@ export default function NewAssessment() {
                   </option>
                   <option value="combined_school">
                     Combined School (K-8 / K-12)
+                  </option>
+                </optgroup>
+                <optgroup label="Commercial">
+                  <option value="commercial_office">
+                    Commercial Office
                   </option>
                 </optgroup>
               </select>

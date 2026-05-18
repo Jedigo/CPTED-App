@@ -184,13 +184,13 @@ The full checklist item text lives in `src/data/zones.ts`. Trimmed from 141 to 6
 
 ## Critical Rules
 
-1. `zones.ts`, `townhome-zones.ts`, `worship-zones.ts`, `christian-zones.ts` are the **source of truth** for checklist content; resolve via `zone-registry.ts`
+1. `zones.ts`, `townhome-zones.ts`, `worship-zones.ts`, `christian-zones.ts`, `school-zones.ts`, `commercial-office-zones.ts` are the **source of truth** for checklist content; resolve via `zone-registry.ts`
 2. Scoring is **1-5** (not 0-5) — no zero score exists
 3. **N/A items excluded** from all score calculations
 4. Photos stored as **base64 data URL strings** in IndexedDB (NOT Blobs — Safari detaches Blob data from IndexedDB, making it unreadable)
 5. PDF must include the **liability waiver verbatim** (see project plan)
 6. PWA manifest app name: **"CPTED Assessor"**
-7. `property_type` supports `single_family_residential`, `townhome`, `places_of_worship`, `christian_church`, `elementary_school`, `middle_school`, `high_school`, and `combined_school` — add new types via zone registry; use `isWorshipType()`, `isResidentialType()`, and `isSchoolType()` helpers instead of enumerating cases
+7. `property_type` supports `single_family_residential`, `townhome`, `places_of_worship`, `christian_church`, `elementary_school`, `middle_school`, `high_school`, `combined_school`, and `commercial_office` — add new types via zone registry; use `isWorshipType()`, `isResidentialType()`, `isSchoolType()`, and `isCommercialType()` helpers instead of enumerating cases
 8. Timestamps: **local time for display**, stored as **ISO 8601 UTC** internally
 9. Photo capture should auto-grab **GPS coordinates and timestamp** from device
 10. **Version bumps are required** on every commit that changes app functionality. Bump the semver version in both `cpted-assessor/package.json` and the version display in `cpted-assessor/src/pages/Home.tsx`. Use patch for fixes, minor for features, major for breaking changes.
@@ -244,6 +244,7 @@ npm run type-check    # TypeScript type checking
 
 - `files(1)/CPTED_App_Project_Plan.md` — Full project plan with complete zone data, API endpoints, Docker config
 - `files(1)/CPTED_Residential_Assessment_Checklist.docx` — Original checklist document (PDF report must match this format)
+- `files(1)/commercial_office_research_draft.md` — Original research draft for commercial-office property type (11 zones / 152 items). **Shipped as `commercial_office`** in v0.20.0, tuned in v0.22.0–v0.23.2 (now 156 items with grouped sidebar + verification hints). Kept for reference.
 
 ## Future Features (Planned)
 
@@ -259,10 +260,10 @@ This requires building a knowledge base mapping each of the 64 checklist items t
 
 ## Current Status
 
-**v0.19.1 deployed.** Added school CPTED assessment types for summer field deployment: Elementary (140 items), Middle (146 items), High (148 items), and Combined K-8/K-12 (150 items) — all 10 zones per type. Single `school-zones.ts` template with band-tagged items generates all 4 type variants; shared `school-item-guidance.ts` covers every item with CPTED standard + improvement guidance (100% coverage). Sources: Volusia Sheriff CPTED school eval, CISA K-12 3rd ed., PASS 7th ed., CDC CSA, and Florida statute (Alyssa's Law, HB 301, MSD Act, HB 1421). `isSchoolType()` helper added to registry. Form + PDF updated with school-specific labels (School Name / Principal / Main Office Phone). Walkthrough phase filter tagged for all school interior items. 0.19.1 patch: corrected 3ft→2ft in the CPTED landscape rule (2'/6' rule). Redeploy with `./deploy.sh`.
+**v0.23.2 deployed.** Commercial Office property type fully shipped and tuned for active Volusia insurance HQ field assessment (inspection 2026-05-23). 11 zones, 156 items, 100% guidance coverage. Customer-walk-in profile resolved (hybrid: locked employee-only building + customers walk in for policy discussions; no transaction counter). Commercial uses a **grouped EXTERIOR/INTERIOR sidebar** instead of the top phase filter — zones appear under the section(s) where they have items (Z6 Loading/Mail appears in both); Previous/Next buttons are section-aware and cross sections at boundaries. Added **Night Walkthrough sidebar tab** (below the zone list, with moon icon) that renders a flat cross-zone list of lighting + after-hours items — appears for all property types that have night-relevant items (not schools). Field-driven refinements: 11 items mis-tagged as exterior re-phased to interior (camera-coverage, alarm-panel-verified, policy/interview items), and added a **`Verify:` hint card** on each of those items so assessor knows exactly what to ask the security director / where to look in the SOC.
 
 **Remaining items / To-Do:**
-- Update server-side zone data + PDF for townhome, worship, Christian church, and school assessments (server still residential-only)
+- Update server-side zone data + PDF for townhome, worship, Christian church, school, and commercial-office assessments (server still residential-only)
 - Voice notes feature (planned)
 - Server-side report storage (planned)
 - Photo annotation — draw arrows/circles on captured photos to highlight issues
@@ -274,12 +275,21 @@ Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch:
 
 ## Session Log
 
-### 2026-02-26 — Item Picker for Manual Recommendations/Quick Wins
-- Added "Pick from Items" button to RecommendationEditor — opens modal showing all scored checklist items grouped by zone
-- Created `ItemPickerModal.tsx` with score badges, duplicate detection ("Added" badge), slot limit enforcement, collapsible zones
-- Exported `ScoredItemContext`, `getItemContext`, `buildDescription`, `getPriority` from `recommendations.ts` for reuse
-- Modified `RecommendationEditor.tsx` (new props: `itemScores`, `propertyType`) and `Summary.tsx` (passes props through)
-- Version: 0.14.0
+### 2026-05-11 to 2026-05-18 — Commercial Office Implementation + Field-Driven Refinements
+- **v0.20.0** — Shipped commercial office property type from research draft. New files: `commercial-office-zones.ts` (11 zones, 152 items), `commercial-office-item-guidance.ts` (100% coverage). Registered `commercial_office` PropertyType + `isCommercialType()` helper in zone-registry. Form labels (Company Name / Facilities or Security Director / Main Office Phone). PDF: "CPTED Commercial Office Assessment" title, `CPTED_CommercialOffice_` filename prefix, Company/Director cover-page labels. 87 items tagged interior in `item-phases.ts`.
+- **v0.21.0–v0.21.1** — Night Walkthrough feature. First impl put Night in the top phase filter — user pushed back ("thought it was a sidebar tab"). Reworked v0.21.1 as a dedicated sidebar tab below the zone list (moon icon + divider). Only renders when assessment has night-relevant items. `NightView.tsx` shows flat list grouped by home zone. `isNightItem(score)` matches `principle === 'lighting'` (commercial Z2/Z4/Z7, worship Z8), `zone_key === 'exterior_lighting'` (residential/townhome), + explicit `NIGHT_ITEMS` Set. **Latent bug fixed along the way:** `handleScoreChange` was recomputing the wrong zone average if you scored an item outside `activeZoneKey` — now reads the item's own `zone_key`.
+- **v0.22.0** — Field-resolved customer-walk-in profile (locked employee-only + customers walk in for policy discussions). Added 4 items: Z5 customer waiting-area visibility, Z5 customer meeting-room sight line OR panic button, Z5 customer-vs-vendor sign-in distinction, Z11 de-escalation training for customer-facing staff. **User-corrected framing:** the meeting-room item was originally pitched as PII protection — user pushed back ("this is security and CPTED, not privacy"). Reframe employee-safety items as natural surveillance + duress capability, not data protection.
+- **v0.23.0** — Grouped EXTERIOR/INTERIOR sidebar for commercial only (user asked for "tabs not filter"). `ZoneSidebar` accepts optional `groupedSections` prop; commercial path computes per-phase zone entries. Z6 Loading/Mail appears in both sections. Top phase filter hidden for commercial — sidebar drives phase. Section-aware Previous/Next buttons cross sections at boundaries ("Start INTERIOR →", "← Back to EXTERIOR"). Commercial auto-defaults to 'exterior' phase on entry.
+- **v0.23.1–v0.23.2** — Field-driven mis-tag fix. User flagged that "Cameras provide overlapping coverage" can't be verified from outside. Audited Z1/Z2/Z4/Z6 and re-phased 11 items requiring SOC/alarm-panel/interview verification to interior. Added `VERIFICATION_HINTS` Map in `item-phases.ts` + small blue **"Verify:"** hint card on those items in `ChecklistItem.tsx`. Same verification context appended to guidance `standard` field so PDF report reflects it too.
+
+### 2026-05-04 — Commercial Office Property Type — Research Phase
+- New CPTED template scoped: large single-tenant insurance HQ (~157,000 sq ft, 4 floors, 11 acres, surface parking only, customer-walk-in question still open). Volusia field season driver.
+- Research-only session — no code. Delegated to a research agent that produced `files(1)/commercial_office_research_draft.md` (452 lines, 11 zones / 152 items, sits in 140–160 target).
+- Zones drafted: Site Perimeter (12) · Surface Parking (18) · Grounds & Outdoor (11) · Building Exterior & Envelope (18) · Lobby & Reception (14) · Loading Dock & Mailroom (13) · Vertical Circulation (12) · Office Floors (13) · Critical & Restricted (13) · Building Systems & Security Tech (10) · Workplace Violence & Active-Threat Readiness (18).
+- Design calls: lighting folded into per-zone principle (matches residential/school); loading dock + mailroom merged (BOMA/GSA/ISC convention); critical/restricted kept as one zone (server/MDF/IDF/HR/utility share CPTED problem profile); active-threat is its own zone per user request.
+- Sources used: Threshold Security CPTED office checklist (most directly translatable item language — 10% window-sign rule, 5 ft furniture clearance, 1-inch deadbolt throw, hinge security), FEMA 426/427/430 (envelope + standoff), CISA Active Shooter Action Guide 2025 + ASIS WVPI AA-2020 (Z11), BOMA + GSA Mail Center Guide 5e + ISC Mail Screening (Z6), NFPA 730 (zone hierarchy).
+- Open questions flagged: customer-walk-in vs. employee-only (affects Z5 ~5 items, most consequential), smoking-area N/A handling, HVM depth, drone/UAS scope, cyber-physical depth, intentional Z5/Z7/Z10/Z11 overlap, Florida statute (none apparent — no commercial analog to school hardening law), N/A-vs-1 for Z11 program items, exterior/interior phase tagging.
+- Next session: resolve open questions, then implement `commercial-office-zones.ts` + `commercial-office-item-guidance.ts`, wire `commercial_office` into `zone-registry.ts`, add form/PDF labels (likely Company Name / Facilities or Security Director / Main Office Phone), tag interior items in `item-phases.ts`.
 
 ### 2026-03-30 — Christian Church Assessment Type + Score Readability Fix
 - Added `christian_church` PropertyType with 8 zones, 84 items — sourced from CISA, Sheepdog Church Security, Tri-Rivers Baptist, Church Production Magazine

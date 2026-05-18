@@ -221,8 +221,216 @@ const INTERIOR_ITEMS = new Set<string>([
   'Reunification site and procedure are established, documented, and known to staff and families',
   'Lockdown, fire, and severe-weather drills have been conducted on the state-required schedule',
   'Mass-notification system (intercom, digital signage, SMS) is tested and functional',
+
+  // ─── Commercial Office: items mis-tagged as exterior that actually require
+  // SOC/alarm-panel/interview verification (re-phased v0.23.1) ───
+  'Remote or seldom-used edges of the property are visible from the building, internal roadways, or dedicated camera coverage',
+  'Parking areas are visible from occupied portions of the building (ground- or upper-floor windows, reception, or security control room)',
+  'Cameras provide overlapping coverage of all parking areas with no significant blind spots between fixtures',
+  'After-hours parking is restricted, and any after-hours arrivals are observable by security staff or via monitored cameras',
+  'The full exterior perimeter is observable from cameras, regularly patrolled paths, or building windows with overlapping coverage',
+  'Secondary exterior doors are alarmed (door-position contact reporting to the security panel) so any opening is detected',
+  'Roof access doors and roof hatches are locked, alarmed, and not used as informal smoking-break exits',
+  'The loading dock is visible from a regularly staffed position, security camera, or both at all times of dock operation',
+  'The exterior approach to the loading dock is camera-covered with continuous recording',
+  'Service entries (janitor, vendor, contractor doors) are alarmed, exit-only or card-controlled, and not propped during business hours',
+  'Vendors, delivery drivers, and contractors check in at the dock or at reception and are issued a temporary badge before entering the building',
+
+  // ─── Commercial Office: Lobby, Reception & Visitor Management (Z5 — all interior) ───
+  'The reception/security desk has direct sight line to the primary exterior door and the full lobby',
+  'Reception staff can see arriving visitors before the visitor reaches the desk (no concealed approach)',
+  'The lobby is monitored by camera with recording, including coverage of the reception desk and any side doors',
+  'A vestibule or transaction barrier separates the public lobby from the employee-controlled portion of the building',
+  'All visitors check in at reception and are issued a visitor badge before entering the controlled portion of the building',
+  'Visitor badges are visually distinct from employee badges and use a self-expiring or dated mechanism so reuse is detected',
+  'Visitors are escorted by a host employee, or are routed through a reception-controlled door, before entering office floors',
+  'A panic alarm or duress button is present at the reception desk and tested on a known schedule',
+  'The transition door from lobby to employee space is controlled by card reader, not propped, and re-locks reliably',
+  'A clearly posted visitor policy or sign-in expectation is visible to arriving visitors',
+  "Reception's location, signage, and orientation make it obvious that all visitors must check in before proceeding",
+  'Reception staff have a workstation view (or shared monitor) of relevant exterior and lobby cameras',
+  'The visitor management system (paper log or software) captures visitor name, host, time in/out, and badge number',
+  'The lobby is well-maintained, brightly lit, and projects a controlled, professional image consistent with corporate ownership',
+  'A designated customer waiting area is visible from reception and not isolated in an unstaffed alcove or back-corner seating',
+  'Customer meeting rooms preserve sight line from outside (vision panel, glass wall) or are equipped with a panic/duress button so employees are not isolated during difficult conversations',
+  'Reception distinguishes customer visitors from vendor/contractor sign-ins so each is routed and badged appropriately',
+
+  // ─── Commercial Office: Loading Dock, Mailroom & Service Entries (Z6 — interior subset) ───
+  'Mailroom intake is observable from another staffed area or by camera covering the receiving counter',
+  'The mailroom has dedicated access control (card reader or staffed sign-in) separating it from the rest of the office space',
+  'A documented suspicious-package protocol (tell-tale signs, isolation procedure, 911 escalation) is posted in or near the mailroom',
+  'Mail and packages are screened (visual inspection at minimum; X-ray, K9, or vendor-screening service if higher tier) before distribution into the building',
+  "The mailroom HVAC is isolated from, or capable of being isolated from, the building's central air handling in the event of a suspicious substance release",
+  'A package-receiving log records inbound deliveries, sender, and recipient for accountability',
+  'The dock and mailroom are clean, organized, and free of accumulated packaging, prop-open wedges, and unsecured tools',
+
+  // ─── Commercial Office: Vertical Circulation (Z7 — all interior) ───
+  'Elevator interiors are camera-covered with recording',
+  'Stairwells are camera-covered at landings or have alarmed door contacts so unauthorized travel is detected',
+  'Floor lobbies (elevator vestibules on each floor) are visible from a regularly occupied position on that floor',
+  'Elevator floor selection requires a credential after hours (or all-times for restricted floors), so unauthenticated travel is blocked',
+  'Stairwell doors permit free egress (life-safety code) but re-entry from the stairwell to office floors is controlled by card reader',
+  'Stairwell re-entry is permitted on at least every fourth floor and on the floor of discharge, in line with code, so occupants are never trapped in a stairwell',
+  'The path from the stairwell discharge to the exterior exit door is unobstructed and well lit',
+  'Roof access from the top stairwell is locked, alarmed, and signed as restricted',
+  'All stairwells are lit at code-required levels with no out or dim fixtures',
+  'Floor lobbies and elevator vestibules are lit to recognize faces on camera',
+  'Stairwells are free of stored materials, propped doors, and accumulated trash',
+  'Elevator cab interiors are clean, undamaged, and free of graffiti',
+
+  // ─── Commercial Office: Office Floors & Workstations (Z8 — all interior) ───
+  'Workstation layout preserves sight lines across the open floor plan rather than creating hidden alcoves or screened workstations',
+  'Conference rooms with glass walls or interior windows allow casual observation of activity from circulation paths',
+  'Cubicle and partition heights do not exceed five feet in primary work areas, in line with CPTED office surveillance guidance',
+  'Executive suite, executive assistant area, or C-suite floor is separated from general office space by access control',
+  'Conference rooms used for sensitive discussions are lockable when in use',
+  'Print/copy rooms with multifunction devices that handle sensitive documents are positioned in low-foot-traffic locations with reasonable visibility',
+  'Employee badging policy requires badges to be worn visibly while on the floor',
+  'Floor signage and wayfinding establish departmental identity (e.g., "Claims Operations — Floor 3") so visitors understand whose territory they have entered',
+  'Executive and restricted floors are signed and visually treated to reinforce that the space is access-controlled',
+  'A clean-desk practice is in effect for sensitive paper records (claims, PII, HR) at end of day',
+  'Workstations are configured so that screens displaying confidential information are not visible from public corridors or windows',
+  'Employees know how to challenge or report a person on the floor without a visible badge',
+  'Office floors are clean, well-maintained, and project a controlled corporate image consistent with the lobby presentation',
+
+  // ─── Commercial Office: Critical & Restricted Areas (Z9 — all interior) ───
+  'Doors to critical rooms are visible from a regularly staffed position or are camera-covered',
+  'Activity in or around mechanical/electrical/utility rooms is observable from corridors rather than from unmonitored hallway dead-ends',
+  'The server room / data center has access control with audit logging (card reader at minimum; biometric where the data sensitivity warrants it)',
+  'MDF and IDF telecom closets are locked at all times and access is limited to IT and authorized vendors',
+  'HR records, claim files, and other PII storage areas are behind access-controlled doors with key or badge logging',
+  'Mechanical, electrical, and elevator-equipment rooms are locked and signed as restricted',
+  'The water service entry, fire-pump room, and any chemical or fuel storage areas are locked and signed',
+  'The emergency generator and fuel storage are protected by perimeter fencing, locked enclosure, or restricted-access yard',
+  'Server room and MDF/IDF rooms are camera-covered with recording',
+  'Door-position contacts on critical rooms report to the security alarm panel and trigger after-hours alerts',
+  'Access logs for critical rooms are reviewed on a defined cadence (the security director can describe the cadence and reviewer)',
+  'Critical rooms are kept clean and free of stored unrelated materials that would obscure equipment or block egress',
+  'Restricted-area signage is current, legible, and free of damage',
+
+  // ─── Commercial Office: Building Systems & Security Technology (Z10 — all interior) ───
+  'The access control system is unified across the entire building (single-tenant context — one platform, one credential per employee)',
+  'The access control system can immediately disable a credential and the security director can describe the revocation workflow',
+  'Camera footage is retained for at least 30 days (90 days preferred per CPTED office guidance)',
+  'Cameras are positioned and resolved to support facial recognition at intended distances; non-working cameras have been repaired or removed',
+  'The intrusion alarm system is monitored 24/7 (in-house SOC or central station) and the monitoring contract is current',
+  'A mass notification system is in place that can reach all building occupants (intercom/PA, SMS, desktop alerts, or combination) and has been tested within the last 12 months',
+  'The security system is integrated with fire/life-safety such that fire alarm activation releases fail-safe doors and elevators recall in line with code',
+  'A documented panic-alarm capability exists at reception, executive areas, and HR with a tested response protocol',
+  'Security technology (cameras, readers, alarm panels, mass-notification devices) shows no visible damage, missing covers, or out-of-service indicators',
+  'Documentation, drawings, and credentials lists are current and reviewed on a stated cadence',
+
+  // ─── Commercial Office: Workplace Violence & Active-Threat Readiness (Z11 — all interior / program) ───
+  'A documented Workplace Violence Prevention policy exists and is communicated to all employees on hire and at a defined refresher cadence',
+  'A multidisciplinary Threat Assessment Team (security, HR, legal, mental-health resource, LE liaison) is in place and meets on a defined cadence to review concerning behavior reports',
+  'A confidential employee-reporting channel exists for threats, intimidation, and concerning behavior, and employees know how to use it',
+  'Pre-employment screening and a documented termination protocol (badge return, escort, threat assessment for high-risk separations) are in place',
+  'Customer-facing staff (claims, policy service, reception) have received de-escalation and hostile-customer response training within the last 24 months',
+  'A written Emergency Action Plan (EAP) covering fire, severe weather, medical, bomb threat, and active assailant is current and accessible to floor wardens',
+  'Run-Hide-Fight (or equivalent ALICE-style) training has been delivered to all employees within the last 24 months',
+  'Lockdown drills have been conducted within the last 12 months and after-action notes are retained',
+  'Floor wardens or a building emergency-response team are designated, named, and trained, with backups identified for absences',
+  'Designated assembly/rally points (and inclement-weather alternates) are identified for evacuation accountability',
+  'The building has a tested capability to immediately lock all access-controlled doors and disable card readers on command (lockdown card or SOC console)',
+  'The building has a tested capability to immediately stop elevators at the next floor so they do not recall to the lobby during an active threat',
+  'Designated rooms or floors have lockable interior doors so occupants can shelter in place, and employees know which rooms qualify',
+  'Mass notification devices (PA, desktop alert, SMS) reach all areas of the building including stairwells, restrooms, and parking; coverage has been verified by drill',
+  'Floor plans, riser diagrams, and access credentials/keys are pre-staged for delivery to law enforcement during an incident (e.g., Knox Box, lobby lockbox, or pre-arranged digital share)',
+  "The security director has a documented coordination point of contact with the Volusia Sheriff's Office (or local LE) and has hosted a familiarization walkthrough within the last 24 months",
+  'Mass notification, panic alarm, and lockdown systems are tested on a documented schedule and test logs are retained',
+  'EAP documents, evacuation maps, and rally-point signage on every floor are current and legible',
+  'Post-incident response resources (EAP, victim assistance contacts, employee assistance program, business continuity playbook) are documented and assigned to a named owner',
 ]);
 
 export function getItemPhase(itemText: string): Phase {
   return INTERIOR_ITEMS.has(itemText) ? 'interior' : 'exterior';
+}
+
+/**
+ * Items that are best observed/verified after dark.
+ *
+ * Used to power the dedicated "Night" walkthrough tab — the assessor opens it
+ * during the nighttime portion of a multi-time-of-day assessment and sees a
+ * flat list of every night-relevant item across all zones, no per-zone hunting.
+ *
+ * Tagging strategy:
+ *   1. Any item in a `lighting` principle (commercial Z2/Z4/Z7, worship/christian Z8)
+ *   2. Any item in the `exterior_lighting` zone (residential + townhome — whole zone)
+ *   3. Explicit one-offs in NIGHT_ITEMS (after-hours observability, motion lights
+ *      that live in other principles)
+ */
+const NIGHT_ITEMS = new Set<string>([
+  // Commercial Office — after-hours observability lives in access_control, not lighting
+  'After-hours parking is restricted, and any after-hours arrivals are observable by security staff or via monitored cameras',
+]);
+
+export function isNightItem(score: {
+  zone_key: string;
+  principle: string;
+  item_text: string;
+}): boolean {
+  if (NIGHT_ITEMS.has(score.item_text)) return true;
+  if (score.zone_key === 'exterior_lighting') return true;
+  if (score.principle === 'lighting') return true;
+  return false;
+}
+
+/**
+ * Field-verification hints for items that require interior access (SOC monitor,
+ * alarm panel, or security-director interview). Shows on the ChecklistItem card
+ * during scoring so the assessor knows what to ask / where to look.
+ *
+ * Most items don't need a hint — only those where verification path is
+ * non-obvious from the item text itself.
+ */
+const VERIFICATION_HINTS = new Map<string, string>([
+  // Commercial office — SOC/alarm/interview verification
+  [
+    'Remote or seldom-used edges of the property are visible from the building, internal roadways, or dedicated camera coverage',
+    'Verify camera coverage of remote edges with the security director.',
+  ],
+  [
+    'Parking areas are visible from occupied portions of the building (ground- or upper-floor windows, reception, or security control room)',
+    'Look out from reception and upper-floor windows during the interior walk.',
+  ],
+  [
+    'Cameras provide overlapping coverage of all parking areas with no significant blind spots between fixtures',
+    'At the SOC monitor, walk between cameras and have the security director confirm you appear on each camera with overlap at the edges.',
+  ],
+  [
+    'After-hours parking is restricted, and any after-hours arrivals are observable by security staff or via monitored cameras',
+    'Ask the security director about after-hours arrival alerts and monitoring coverage.',
+  ],
+  [
+    'The full exterior perimeter is observable from cameras, regularly patrolled paths, or building windows with overlapping coverage',
+    'Review the camera-coverage map or SOC feeds with the security director.',
+  ],
+  [
+    'Secondary exterior doors are alarmed (door-position contact reporting to the security panel) so any opening is detected',
+    'Verify door-position contacts at the intrusion alarm panel or SOC.',
+  ],
+  [
+    'Roof access doors and roof hatches are locked, alarmed, and not used as informal smoking-break exits',
+    'Verify the lock by accessing the top stairwell; verify alarm status at the panel.',
+  ],
+  [
+    'The loading dock is visible from a regularly staffed position, security camera, or both at all times of dock operation',
+    'Ask the dock supervisor about their sight line; check the dock camera feed at the SOC.',
+  ],
+  [
+    'The exterior approach to the loading dock is camera-covered with continuous recording',
+    'Confirm at the SOC monitor — verify the dock-approach camera captures license plates.',
+  ],
+  [
+    'Service entries (janitor, vendor, contractor doors) are alarmed, exit-only or card-controlled, and not propped during business hours',
+    'Verify alarm status at the panel; check door hardware up close during the interior walk.',
+  ],
+  [
+    'Vendors, delivery drivers, and contractors check in at the dock or at reception and are issued a temporary badge before entering the building',
+    'Review the dock check-in log and interview the dock supervisor about the vendor protocol.',
+  ],
+]);
+
+export function getVerificationHint(itemText: string): string | undefined {
+  return VERIFICATION_HINTS.get(itemText);
 }

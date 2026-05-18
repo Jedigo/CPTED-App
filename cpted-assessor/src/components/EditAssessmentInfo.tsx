@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { db } from '../db/database'
-import { isWorshipType, isSchoolType } from '../data/zone-registry'
+import { isWorshipType, isSchoolType, isCommercialType } from '../data/zone-registry'
 import type { Assessment, AssessmentType, TimeOfAssessment } from '../types'
 
 interface Props {
@@ -27,6 +27,7 @@ export default function EditAssessmentInfo({ assessment, open, onClose }: Props)
 
   const isWorship = isWorshipType(assessment.property_type)
   const isSchool = isSchoolType(assessment.property_type)
+  const isCommercial = isCommercialType(assessment.property_type)
 
   // Populate fields when modal opens
   useEffect(() => {
@@ -205,7 +206,7 @@ export default function EditAssessmentInfo({ assessment, open, onClose }: Props)
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={labelClass}>
-                      {isSchool ? 'School Name' : isWorship ? 'Organization Name' : 'Homeowner Name'} <span className="text-red-500">*</span>
+                      {isSchool ? 'School Name' : isCommercial ? 'Company Name' : isWorship ? 'Organization Name' : 'Homeowner Name'} <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -219,7 +220,7 @@ export default function EditAssessmentInfo({ assessment, open, onClose }: Props)
                   </div>
                   <div>
                     <label className={labelClass}>
-                      {isSchool ? 'Principal / Contact Person' : isWorship ? 'Contact Person' : 'Homeowner Contact'}
+                      {isSchool ? 'Principal / Contact Person' : isCommercial ? 'Facilities or Security Director' : isWorship ? 'Contact Person' : 'Homeowner Contact'}
                     </label>
                     <input
                       type="text"
@@ -232,7 +233,7 @@ export default function EditAssessmentInfo({ assessment, open, onClose }: Props)
 
                 <div>
                   <label className={labelClass}>
-                    {isSchool ? 'Main Office Phone' : 'Contact Phone'}
+                    {isSchool || isCommercial ? 'Main Office Phone' : 'Contact Phone'}
                   </label>
                   <input
                     type="tel"

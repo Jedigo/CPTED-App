@@ -22,6 +22,8 @@ import {
   COMBINED_SCHOOL_ZONES,
 } from './school-zones';
 import { SCHOOL_ITEM_GUIDANCE } from './school-item-guidance';
+import { COMMERCIAL_OFFICE_ZONES } from './commercial-office-zones';
+import { COMMERCIAL_OFFICE_ITEM_GUIDANCE } from './commercial-office-item-guidance';
 
 export function getZonesForType(propertyType: PropertyType): ZoneDefinition[] {
   switch (propertyType) {
@@ -39,6 +41,8 @@ export function getZonesForType(propertyType: PropertyType): ZoneDefinition[] {
       return HIGH_SCHOOL_ZONES;
     case 'combined_school':
       return COMBINED_SCHOOL_ZONES;
+    case 'commercial_office':
+      return COMMERCIAL_OFFICE_ZONES;
     case 'single_family_residential':
     default:
       return ZONES;
@@ -58,6 +62,8 @@ export function getItemGuidanceForType(propertyType: PropertyType): Map<string, 
     case 'high_school':
     case 'combined_school':
       return SCHOOL_ITEM_GUIDANCE;
+    case 'commercial_office':
+      return COMMERCIAL_OFFICE_ITEM_GUIDANCE;
     case 'single_family_residential':
     default:
       return ITEM_GUIDANCE;
@@ -81,6 +87,8 @@ export function getPropertyTypeLabel(propertyType: PropertyType): string {
       return 'High School';
     case 'combined_school':
       return 'Combined School (K-8 / K-12)';
+    case 'commercial_office':
+      return 'Commercial Office';
     case 'single_family_residential':
     default:
       return 'Single Family Residential';
@@ -105,4 +113,9 @@ export function isSchoolType(propertyType: PropertyType): boolean {
     propertyType === 'high_school' ||
     propertyType === 'combined_school'
   );
+}
+
+/** Returns true for commercial office property types */
+export function isCommercialType(propertyType: PropertyType): boolean {
+  return propertyType === 'commercial_office';
 }

@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { db } from '../db/database';
-import { getZonesForType, getItemGuidanceForType, isWorshipType, isSchoolType } from '../data/zone-registry';
+import { getZonesForType, getItemGuidanceForType, isWorshipType, isSchoolType, isCommercialType } from '../data/zone-registry';
 import {
   getScoreLabel,
   getCompletionCounts,
@@ -52,9 +52,11 @@ function generateFilename(assessment: Assessment): string {
   const date = assessment.date_of_assessment || assessment.created_at.slice(0, 10);
   const typePrefix = isSchoolType(assessment.property_type)
     ? 'CPTED_School'
-    : isWorshipType(assessment.property_type)
-      ? 'CPTED_Worship'
-      : 'CPTED_Assessment';
+    : isCommercialType(assessment.property_type)
+      ? 'CPTED_CommercialOffice'
+      : isWorshipType(assessment.property_type)
+        ? 'CPTED_Worship'
+        : 'CPTED_Assessment';
   return `${typePrefix}_${addr}_${date}.pdf`;
 }
 
@@ -148,6 +150,8 @@ function getReportTitle(propertyType: PropertyType): string {
       return 'CPTED High School Assessment';
     case 'combined_school':
       return 'CPTED Combined School Assessment';
+    case 'commercial_office':
+      return 'CPTED Commercial Office Assessment';
     default:
       return 'CPTED Residential Assessment';
   }
@@ -238,14 +242,18 @@ function renderCoverPage(doc: jsPDF, data: PDFData): void {
 
   const ownerLabel = isSchoolType(pt)
     ? 'School:'
-    : isWorshipType(pt)
-      ? 'Organization:'
-      : 'Homeowner:';
+    : isCommercialType(pt)
+      ? 'Company:'
+      : isWorshipType(pt)
+        ? 'Organization:'
+        : 'Homeowner:';
   const contactLabel = isSchoolType(pt)
     ? 'Principal / Contact:'
-    : isWorshipType(pt)
-      ? 'Contact Person:'
-      : 'Contact:';
+    : isCommercialType(pt)
+      ? 'Facilities / Security Director:'
+      : isWorshipType(pt)
+        ? 'Contact Person:'
+        : 'Contact:';
   const metaItems: [string, string, number][] = [
     [ownerLabel, assessment.homeowner_name, leftX],
     ['Assessment Date:', formatDate(assessment.date_of_assessment), rightX],
@@ -333,12 +341,23 @@ function renderSummaryPage(doc: jsPDF, data: PDFData): void {
   const worstZones = scoredZones.filter((z) => z.score < 3).slice(0, 2);
   const bestZones = scoredZones.filter((z) => z.score >= 4).slice(-2).reverse();
 
-  const zoneCountWord = data.zones.length === 7 ? 'seven' : data.zones.length === 8 ? 'eight' : data.zones.length === 10 ? 'ten' : String(data.zones.length);
+  const zoneCountWord =
+    data.zones.length === 7
+      ? 'seven'
+      : data.zones.length === 8
+        ? 'eight'
+        : data.zones.length === 10
+          ? 'ten'
+          : data.zones.length === 11
+            ? 'eleven'
+            : String(data.zones.length);
   const typeLabel = isSchoolType(data.assessment.property_type)
     ? 'school security'
-    : isWorshipType(data.assessment.property_type)
-      ? 'facility security'
-      : 'residential security';
+    : isCommercialType(data.assessment.property_type)
+      ? 'commercial office security'
+      : isWorshipType(data.assessment.property_type)
+        ? 'facility security'
+        : 'residential security';
   let narrative = `This assessment evaluated ${data.assessment.address} across ${zoneCountWord} ${typeLabel} zones, covering ${totalScored} checklist items.`;
   if (overall !== null) {
     narrative += ` The property received an overall score of ${overall.toFixed(1)} (${getScoreLabel(overall)}).`;
@@ -811,9 +830,11 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
       doc.setTextColor(80);
       const strengthsIntro = isSchoolType(pt)
         ? 'This school demonstrates strong security practices in these areas:'
-        : isWorshipType(pt)
-          ? 'Your facility demonstrates strong security practices in these areas:'
-          : 'Your property demonstrates strong security practices in these areas:';
+        : isCommercialType(pt)
+          ? 'This facility demonstrates strong security practices in these areas:'
+          : isWorshipType(pt)
+            ? 'Your facility demonstrates strong security practices in these areas:'
+            : 'Your property demonstrates strong security practices in these areas:';
       doc.text(strengthsIntro, PAGE_MARGIN + 2, y);
       y += 5;
 
@@ -903,7 +924,7 @@ function renderZoneDetails(doc: jsPDF, data: PDFData): void {
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(140);
       doc.text(
-        `${naItems.length} item${naItems.length === 1 ? '' : 's'} marked as not applicable to this ${isSchoolType(pt) ? 'school' : isWorshipType(pt) ? 'facility' : 'property'}.`,
+        `${naItems.length} item${naItems.length === 1 ? '' : 's'} marked as not applicable to this ${isSchoolType(pt) ? 'school' : isCommercialType(pt) ? 'facility' : isWorshipType(pt) ? 'facility' : 'property'}.`,
         PAGE_MARGIN,
         y,
       );

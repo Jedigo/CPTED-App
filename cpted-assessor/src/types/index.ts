@@ -8,6 +8,7 @@ export type PropertyType =
   | 'middle_school'
   | 'high_school'
   | 'combined_school'
+  | 'commercial_office'
 export type AssessmentType = 'initial' | 'follow_up' | 're_assessment'
 export type TimeOfAssessment = 'daytime' | 'nighttime' | 'both'
 export type Priority = 'high' | 'medium' | 'low'

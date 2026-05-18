@@ -4,6 +4,7 @@ import ScoreButtons from './ScoreButtons';
 import PhotoThumbnail from './PhotoThumbnail';
 import PhotoViewer from './PhotoViewer';
 import { savePhoto, deletePhoto } from '../services/photos';
+import { getVerificationHint } from '../data/item-phases';
 
 interface ChecklistItemProps {
   itemScore: ItemScore;
@@ -66,6 +67,24 @@ export default function ChecklistItem({
       >
         {itemScore.item_text}
       </p>
+
+      {(() => {
+        const hint = getVerificationHint(itemScore.item_text);
+        if (!hint) return null;
+        return (
+          <div
+            className={`mb-3 flex items-start gap-1.5 rounded-md bg-blue-pale border border-blue-medium/30 px-2.5 py-1.5 text-xs leading-snug ${
+              isNa ? 'opacity-50' : ''
+            }`}
+            role="note"
+          >
+            <span className="text-blue-medium font-semibold flex-shrink-0">
+              Verify:
+            </span>
+            <span className="text-ink/80">{hint}</span>
+          </div>
+        );
+      })()}
 
       <div className="flex items-center gap-2 flex-wrap">
         <ScoreButtons
