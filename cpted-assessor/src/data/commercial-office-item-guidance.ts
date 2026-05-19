@@ -166,11 +166,11 @@ export const COMMERCIAL_OFFICE_ITEM_GUIDANCE = new Map<string, ItemGuidance>([
       standard:
         'Designated visitor parking close to the main entrance channels visitors past reception and away from operational/employee-only areas.',
       improvement:
-        'Reserve stalls closest to the main entrance for visitors. Add pavement markings ("VISITOR") and overhead signage. Reinforce with signage at the property entry directing visitors to the correct lot.',
+        'Reserve parking spaces closest to the main entrance for visitors. Add pavement markings ("VISITOR") and overhead signage. Reinforce with signage at the property entry directing visitors to the correct lot.',
     },
   ],
   [
-    'Employee-only parking sections are marked with signage or pavement treatments that distinguish them from visitor stalls',
+    'Employee-only parking sections are marked with signage or pavement treatments that distinguish them from visitor parking spaces',
     {
       standard:
         'Distinguishing employee from visitor parking helps security recognize unfamiliar vehicles in employee zones and reinforces territoriality.',
@@ -242,21 +242,12 @@ export const COMMERCIAL_OFFICE_ITEM_GUIDANCE = new Map<string, ItemGuidance>([
     },
   ],
   [
-    'Stall striping, directional arrows, and curb treatments are crisp and current rather than faded or obscured',
-    {
-      standard:
-        'Crisp pavement markings reinforce territorial control and project active maintenance — both CPTED indicators of guardianship.',
-      improvement:
-        'Restripe the lot on a 3-5 year cycle. Repaint directional arrows and fire lanes annually. Refresh curb paint (yellow for fire lanes, red for no-parking) as it weathers.',
-    },
-  ],
-  [
-    'Designated visitor stalls are reinforced by signage and pavement markings',
+    'Designated visitor parking spaces are reinforced by signage and pavement markings',
     {
       standard:
         'Combining pavement markings with overhead signage creates redundant cues that reduce visitor confusion and reinforce employee-only zones.',
       improvement:
-        'Add pavement-stenciled "VISITOR" lettering and post overhead signage at each visitor stall. Use a consistent color (often green or blue) distinct from employee stalls.',
+        'Add pavement-stenciled "VISITOR" lettering and post overhead signage at each visitor parking space. Use a consistent color (often green or blue) distinct from employee parking spaces.',
     },
   ],
   [
@@ -269,7 +260,7 @@ export const COMMERCIAL_OFFICE_ITEM_GUIDANCE = new Map<string, ItemGuidance>([
     },
   ],
   [
-    'The parking lot is free of abandoned vehicles, accumulated debris, broken pavement, and damaged stalls',
+    'The parking lot is free of abandoned vehicles, accumulated debris, broken pavement, and damaged parking spaces',
     {
       standard:
         'Visible disorder in the lot signals reduced guardianship and invites additional disorder per Broken Windows.',
@@ -313,6 +304,15 @@ export const COMMERCIAL_OFFICE_ITEM_GUIDANCE = new Map<string, ItemGuidance>([
         'Dumpster areas are common locations for dumping, dumpster diving, and bomb-staging concealment. Surveillance discourages all three.',
       improvement:
         'Relocate dumpsters away from blind corners. Add cameras covering the enclosure. Position the enclosure within sight of a regularly used walking or driving path.',
+    },
+  ],
+  [
+    "Landscaping along walkways, courtyards, and the building face follows the CPTED 2'/6' rule (shrubs trimmed below 2 ft, tree canopies above 6 ft) so concealment is eliminated and sight lines are preserved",
+    {
+      standard:
+        "The 2'/6' rule is the core CPTED landscape principle for natural surveillance — low shrubs and high canopies leave the 2-to-6-foot 'visibility band' clear so a person cannot hide behind plantings and so sight lines from the building, walkways, and parking are preserved.",
+      improvement:
+        "Walk the grounds quarterly with the landscape contractor. Trim shrubs to keep them under 2 ft, especially within 5-10 ft of walkways, building face, and seating areas. Limb up trees so canopies start above 6 ft. Document the schedule in the landscape maintenance contract so it doesn't drift seasonally.",
     },
   ],
   [
@@ -1084,7 +1084,7 @@ export const COMMERCIAL_OFFICE_ITEM_GUIDANCE = new Map<string, ItemGuidance>([
     },
   ],
   [
-    'MDF and IDF telecom closets are locked at all times and access is limited to IT and authorized vendors',
+    'Main and floor-level telecom/network closets (often labeled MDF and IDF) are locked at all times and access is limited to IT and authorized vendors',
     {
       standard:
         'MDF/IDF closets contain the network and telecom backbone. Compromise enables eavesdropping, tapping, and lateral attacks on the network.',
@@ -1129,7 +1129,7 @@ export const COMMERCIAL_OFFICE_ITEM_GUIDANCE = new Map<string, ItemGuidance>([
     },
   ],
   [
-    'Server room and MDF/IDF rooms are camera-covered with recording',
+    'Server room and telecom/network closets (MDF and IDF rooms) are camera-covered with recording',
     {
       standard:
         'Camera coverage of server rooms supports insider-threat investigation and provides accountability for vendor and IT staff visits.',

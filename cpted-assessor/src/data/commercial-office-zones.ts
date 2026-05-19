@@ -73,7 +73,7 @@ export const COMMERCIAL_OFFICE_ZONES: ZoneDefinition[] = [
         name: 'Access Control',
         items: [
           'Visitor parking is clearly marked, located adjacent to the main entrance, and signed at the property approach',
-          'Employee-only parking sections are marked with signage or pavement treatments that distinguish them from visitor stalls',
+          'Employee-only parking sections are marked with signage or pavement treatments that distinguish them from visitor parking spaces',
           'Vehicle entry/exit points are clearly marked, controlled by gate or stop control where appropriate, and minimized to the operational minimum',
           'After-hours parking is restricted, and any after-hours arrivals are observable by security staff or via monitored cameras',
         ],
@@ -93,8 +93,7 @@ export const COMMERCIAL_OFFICE_ZONES: ZoneDefinition[] = [
         key: 'territorial_reinforcement',
         name: 'Territorial Reinforcement',
         items: [
-          'Stall striping, directional arrows, and curb treatments are crisp and current rather than faded or obscured',
-          'Designated visitor stalls are reinforced by signage and pavement markings',
+          'Designated visitor parking spaces are reinforced by signage and pavement markings',
           'Wayfinding signs guide visitors from parking to the main entry without ambiguity',
         ],
       },
@@ -102,7 +101,7 @@ export const COMMERCIAL_OFFICE_ZONES: ZoneDefinition[] = [
         key: 'maintenance',
         name: 'Maintenance & Image',
         items: [
-          'The parking lot is free of abandoned vehicles, accumulated debris, broken pavement, and damaged stalls',
+          'The parking lot is free of abandoned vehicles, accumulated debris, broken pavement, and damaged parking spaces',
           'Pavement markings, signs, and curb paint are maintained in legible condition',
         ],
       },
@@ -122,6 +121,7 @@ export const COMMERCIAL_OFFICE_ZONES: ZoneDefinition[] = [
           'Outdoor break, smoking, and eating areas are visible from inside the building or from regularly traveled walkways',
           'Walking paths and trails are open and unobstructed by tall hedges, blind curves, or screened bench enclosures',
           'Trash, dumpster, and recycling areas are visible from the building or from a regularly traveled vehicle route',
+          "Landscaping along walkways, courtyards, and the building face follows the CPTED 2'/6' rule (shrubs trimmed below 2 ft, tree canopies above 6 ft) so concealment is eliminated and sight lines are preserved",
         ],
       },
       {
@@ -419,7 +419,7 @@ export const COMMERCIAL_OFFICE_ZONES: ZoneDefinition[] = [
     name: 'Critical & Restricted Areas',
     order: 9,
     description:
-      'Evaluate the rooms that, if compromised, take down the business or expose the company to significant liability — server room, MDF/IDF closets, executive suite, HR records, file rooms, mechanical rooms, electrical rooms, water service entry, and the emergency generator. These share a CPTED problem profile (high-value, low-foot-traffic, must-be-locked, must-be-logged).',
+      'Evaluate the rooms that, if compromised, take down the business or expose the company to significant liability — server room, telecom/network closets (MDF/IDF), executive suite, HR records, file rooms, mechanical rooms, electrical rooms, water service entry, and the emergency generator. These share a CPTED problem profile (high-value, low-foot-traffic, must-be-locked, must-be-logged).',
     principles: [
       {
         key: 'natural_surveillance',
@@ -434,7 +434,7 @@ export const COMMERCIAL_OFFICE_ZONES: ZoneDefinition[] = [
         name: 'Access Control',
         items: [
           'The server room / data center has access control with audit logging (card reader at minimum; biometric where the data sensitivity warrants it)',
-          'MDF and IDF telecom closets are locked at all times and access is limited to IT and authorized vendors',
+          'Main and floor-level telecom/network closets (often labeled MDF and IDF) are locked at all times and access is limited to IT and authorized vendors',
           'HR records, claim files, and other PII storage areas are behind access-controlled doors with key or badge logging',
           'Mechanical, electrical, and elevator-equipment rooms are locked and signed as restricted',
           'The water service entry, fire-pump room, and any chemical or fuel storage areas are locked and signed',
@@ -445,7 +445,7 @@ export const COMMERCIAL_OFFICE_ZONES: ZoneDefinition[] = [
         key: 'security_technology',
         name: 'Security Systems & Technology',
         items: [
-          'Server room and MDF/IDF rooms are camera-covered with recording',
+          'Server room and telecom/network closets (MDF and IDF rooms) are camera-covered with recording',
           'Door-position contacts on critical rooms report to the security alarm panel and trigger after-hours alerts',
           'Access logs for critical rooms are reviewed on a defined cadence (the security director can describe the cadence and reviewer)',
         ],

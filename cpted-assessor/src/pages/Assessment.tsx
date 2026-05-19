@@ -136,11 +136,17 @@ export default function Assessment() {
   }, [activeZoneKey]);
 
   // Filter item scores by active phase
+  // Exterior/interior tabs exclude night-tagged items (lighting principle +
+  // explicit NIGHT_ITEMS). Those are scored exclusively from the Night tab so
+  // the assessor doesn't see lighting twice and isn't tempted to score it in
+  // daylight when the actual illumination check has to happen after dark.
   const phaseFilteredScores = useMemo(() => {
     if (!itemScores) return [];
     if (phaseFilter === 'all') return itemScores;
     if (phaseFilter === 'night') return itemScores.filter(isNightItem);
-    return itemScores.filter((s) => getItemPhase(s.item_text) === phaseFilter);
+    return itemScores.filter(
+      (s) => getItemPhase(s.item_text) === phaseFilter && !isNightItem(s),
+    );
   }, [itemScores, phaseFilter]);
 
   // Group filtered item scores by zone key (drives ZoneView + ZoneSidebar dots)
@@ -246,7 +252,10 @@ export default function Assessment() {
       const entries = zones
         .map((zone) => {
           const items = itemScores.filter(
-            (s) => s.zone_key === zone.key && getItemPhase(s.item_text) === phase,
+            (s) =>
+              s.zone_key === zone.key &&
+              getItemPhase(s.item_text) === phase &&
+              !isNightItem(s),
           );
           return { zone, items };
         })

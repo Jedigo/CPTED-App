@@ -235,6 +235,7 @@ const INTERIOR_ITEMS = new Set<string>([
   'The exterior approach to the loading dock is camera-covered with continuous recording',
   'Service entries (janitor, vendor, contractor doors) are alarmed, exit-only or card-controlled, and not propped during business hours',
   'Vendors, delivery drivers, and contractors check in at the dock or at reception and are issued a temporary badge before entering the building',
+  'Ground-floor windows are not obstructed by interior signs, posters, or furniture beyond the 10% / 5-ft CPTED guideline',
 
   // ─── Commercial Office: Lobby, Reception & Visitor Management (Z5 — all interior) ───
   'The reception/security desk has direct sight line to the primary exterior door and the full lobby',
@@ -297,12 +298,12 @@ const INTERIOR_ITEMS = new Set<string>([
   'Doors to critical rooms are visible from a regularly staffed position or are camera-covered',
   'Activity in or around mechanical/electrical/utility rooms is observable from corridors rather than from unmonitored hallway dead-ends',
   'The server room / data center has access control with audit logging (card reader at minimum; biometric where the data sensitivity warrants it)',
-  'MDF and IDF telecom closets are locked at all times and access is limited to IT and authorized vendors',
+  'Main and floor-level telecom/network closets (often labeled MDF and IDF) are locked at all times and access is limited to IT and authorized vendors',
   'HR records, claim files, and other PII storage areas are behind access-controlled doors with key or badge logging',
   'Mechanical, electrical, and elevator-equipment rooms are locked and signed as restricted',
   'The water service entry, fire-pump room, and any chemical or fuel storage areas are locked and signed',
   'The emergency generator and fuel storage are protected by perimeter fencing, locked enclosure, or restricted-access yard',
-  'Server room and MDF/IDF rooms are camera-covered with recording',
+  'Server room and telecom/network closets (MDF and IDF rooms) are camera-covered with recording',
   'Door-position contacts on critical rooms report to the security alarm panel and trigger after-hours alerts',
   'Access logs for critical rooms are reviewed on a defined cadence (the security director can describe the cadence and reviewer)',
   'Critical rooms are kept clean and free of stored unrelated materials that would obscure equipment or block egress',
@@ -369,6 +370,11 @@ export function isNightItem(score: {
   principle: string;
   item_text: string;
 }): boolean {
+  // Interior-tagged items are never night items, even when in a lighting
+  // principle. The assessor doesn't have building access after dark, so
+  // interior fixtures (Z7 stairwells, elevator vestibules) belong on the
+  // Interior walk, not the Night walk.
+  if (INTERIOR_ITEMS.has(score.item_text)) return false;
   if (NIGHT_ITEMS.has(score.item_text)) return true;
   if (score.zone_key === 'exterior_lighting') return true;
   if (score.principle === 'lighting') return true;
@@ -428,6 +434,10 @@ const VERIFICATION_HINTS = new Map<string, string>([
   [
     'Vendors, delivery drivers, and contractors check in at the dock or at reception and are issued a temporary badge before entering the building',
     'Review the dock check-in log and interview the dock supervisor about the vendor protocol.',
+  ],
+  [
+    'Ground-floor windows are not obstructed by interior signs, posters, or furniture beyond the 10% / 5-ft CPTED guideline',
+    'Check from inside — verify sign coverage on the glazing is under 10% and that desks/file cabinets are at least 5 ft back from ground-floor windows. Especially important when the glass is mirrored or heavily tinted.',
   ],
 ]);
 
