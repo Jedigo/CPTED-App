@@ -22,7 +22,12 @@ type FilterTab = 'all' | 'in_progress' | 'completed' | 'server';
 
 function formatDate(iso: string): string {
   try {
-    return new Date(iso).toLocaleDateString('en-US', {
+    // Date-only strings (YYYY-MM-DD from <input type="date">) parse as UTC
+    // midnight, which renders as the previous day in negative-offset zones.
+    // Force local-midnight parsing for those.
+    const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(iso);
+    const d = dateOnly ? new Date(iso + 'T00:00:00') : new Date(iso);
+    return d.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
@@ -389,7 +394,7 @@ export default function Home() {
                         <div className="flex items-center gap-3 mt-2 text-sm text-ink/40">
                           <span>{assessment.homeowner_name}</span>
                           <span>&middot;</span>
-                          <span>{formatDate(assessment.created_at)}</span>
+                          <span>{formatDate(assessment.date_of_assessment)}</span>
                           {assessment.synced_at && (
                             <>
                               <span>&middot;</span>
@@ -559,7 +564,7 @@ export default function Home() {
       </div>
 
       {/* Version indicator */}
-      <p className="text-center text-[10px] text-ink/50 mt-6">v0.24.0</p>
+      <p className="text-center text-[10px] text-ink/50 mt-6">v0.24.1</p>
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog

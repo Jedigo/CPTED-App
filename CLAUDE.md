@@ -260,7 +260,7 @@ This requires building a knowledge base mapping each of the 64 checklist items t
 
 ## Current Status
 
-**v0.23.2 deployed.** Commercial Office property type fully shipped and tuned for active Volusia insurance HQ field assessment (inspection 2026-05-23). 11 zones, 156 items, 100% guidance coverage. Customer-walk-in profile resolved (hybrid: locked employee-only building + customers walk in for policy discussions; no transaction counter). Commercial uses a **grouped EXTERIOR/INTERIOR sidebar** instead of the top phase filter — zones appear under the section(s) where they have items (Z6 Loading/Mail appears in both); Previous/Next buttons are section-aware and cross sections at boundaries. Added **Night Walkthrough sidebar tab** (below the zone list, with moon icon) that renders a flat cross-zone list of lighting + after-hours items — appears for all property types that have night-relevant items (not schools). Field-driven refinements: 11 items mis-tagged as exterior re-phased to interior (camera-coverage, alarm-panel-verified, policy/interview items), and added a **`Verify:` hint card** on each of those items so assessor knows exactly what to ask the security director / where to look in the SOC.
+**v0.24.1 deployed.** Commercial Office template completed a pre-deployment audit pass (2026-05-19) ahead of the 2026-05-20 Volusia insurance HQ walkthrough. Item count is still 156 (dropped 1 duplicate, added the missing 2'/6' rule item). Five findings batched in v0.24.0: lighting items now scored only from the Night tab (not Exterior/Interior); plain-English replacements for "stall" / "stall striping" jargon; the 10%/5-ft ground-floor-window item re-tagged interior with a `Verify:` hint for mirrored-glazing properties; missing 2'/6' landscape rule added to Z3 Natural Surveillance; plain-language MDF/IDF explanations everywhere those abbreviations appear; and `isNightItem` no longer pulls Z7 interior lighting (stairwells, floor lobbies) into Night where the assessor has no after-hours access. v0.24.1 patched a Home dashboard bug — list now shows `date_of_assessment` (the field edited in Edit Info) instead of `created_at`, with safe local-midnight parsing for `YYYY-MM-DD` strings so the date doesn't render a day early in Eastern time.
 
 **Remaining items / To-Do:**
 - Update server-side zone data + PDF for townhome, worship, Christian church, school, and commercial-office assessments (server still residential-only)
@@ -274,6 +274,20 @@ This requires building a knowledge base mapping each of the 64 checklist items t
 Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch: `main`)
 
 ## Session Log
+
+### 2026-05-19 — Commercial Audit Refinements (v0.23.3 → v0.24.1) + Dashboard Date Fix
+- Field-driven audit pass on the commercial template ahead of tomorrow's (2026-05-20) Volusia insurance HQ walkthrough. Five findings collected in `files(1)/commercial-audit-followups.md` during the audit, then batched as v0.24.0; date-bug follow-up shipped as v0.24.1.
+- **v0.23.3** — Lighting items hidden from Exterior/Interior tabs entirely; scored only from Night Walkthrough. `phaseFilteredScores` in `Assessment.tsx` adds `!isNightItem(s)` to the exterior/interior filter path; same change applied to the commercial grouped-sidebar's per-section item count.
+- **v0.23.4–v0.23.5** — Plain-language replacements for parking jargon. "Stall striping..." → "Painted parking space lines, directional arrows, and curb markings..."; "visitor stalls" / "damaged stalls" / "Reserve stalls" → "...parking spaces". Touches 3 zone-file items + 3 guidance-Map keys + body text in two improvement strings.
+- **v0.24.0 (batched five findings):**
+  1. Dropped duplicate "Painted parking space lines..." item from Z2 Territorial Reinforcement (overlapped the Maintenance & Image item) — parking_pedestrian now 17 items.
+  2. Re-tagged "Ground-floor windows are not obstructed by interior signs..." to interior (mirrored/tinted glazing makes exterior view unreliable) + added a VERIFICATION_HINTS entry.
+  3. Added missing 2'/6' landscape rule to Z3 Natural Surveillance — was in Z1/Z2 but absent from the dedicated landscaping zone. grounds_outdoor now 12 items.
+  4. Plain-language MDF/IDF: "Main and floor-level telecom/network closets (often labeled MDF and IDF)..." — covers 2 scoring items + the Z9 description, with matching `INTERIOR_ITEMS` keys synced.
+  5. `isNightItem` now returns false for any item in `INTERIOR_ITEMS` — Z7 stairwell + floor-lobby lighting moves back to the Interior walk. (The v0.23.3 change had accidentally hidden them from both tabs.)
+- **v0.24.1** — Home.tsx dashboard list was displaying `created_at` (system timestamp) instead of `date_of_assessment` (the field set in Edit Info). Also added local-midnight parsing in `formatDate` so `YYYY-MM-DD` date-only strings don't render a day early in Eastern time. NOTE: this version's changes (package.json + Home.tsx) were not yet committed at session close — `git status` showed them unstaged.
+- Net item count unchanged at 156 (dropped 1, added 1). Audit follow-ups file at `files(1)/commercial-audit-followups.md` is the working-record of the audit and was applied verbatim in v0.24.0.
+- Versions shipped: 0.23.3, 0.23.4, 0.23.5, 0.24.0, 0.24.1.
 
 ### 2026-05-11 to 2026-05-18 — Commercial Office Implementation + Field-Driven Refinements
 - **v0.20.0** — Shipped commercial office property type from research draft. New files: `commercial-office-zones.ts` (11 zones, 152 items), `commercial-office-item-guidance.ts` (100% coverage). Registered `commercial_office` PropertyType + `isCommercialType()` helper in zone-registry. Form labels (Company Name / Facilities or Security Director / Main Office Phone). PDF: "CPTED Commercial Office Assessment" title, `CPTED_CommercialOffice_` filename prefix, Company/Director cover-page labels. 87 items tagged interior in `item-phases.ts`.
@@ -290,13 +304,6 @@ Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch:
 - Sources used: Threshold Security CPTED office checklist (most directly translatable item language — 10% window-sign rule, 5 ft furniture clearance, 1-inch deadbolt throw, hinge security), FEMA 426/427/430 (envelope + standoff), CISA Active Shooter Action Guide 2025 + ASIS WVPI AA-2020 (Z11), BOMA + GSA Mail Center Guide 5e + ISC Mail Screening (Z6), NFPA 730 (zone hierarchy).
 - Open questions flagged: customer-walk-in vs. employee-only (affects Z5 ~5 items, most consequential), smoking-area N/A handling, HVM depth, drone/UAS scope, cyber-physical depth, intentional Z5/Z7/Z10/Z11 overlap, Florida statute (none apparent — no commercial analog to school hardening law), N/A-vs-1 for Z11 program items, exterior/interior phase tagging.
 - Next session: resolve open questions, then implement `commercial-office-zones.ts` + `commercial-office-item-guidance.ts`, wire `commercial_office` into `zone-registry.ts`, add form/PDF labels (likely Company Name / Facilities or Security Director / Main Office Phone), tag interior items in `item-phases.ts`.
-
-### 2026-03-30 — Christian Church Assessment Type + Score Readability Fix
-- Added `christian_church` PropertyType with 8 zones, 84 items — sourced from CISA, Sheepdog Church Security, Tri-Rivers Baptist, Church Production Magazine
-- Key differences from Catholic: stage/platform, sound booth/AV, baptistry, gymnasium, cafe/bookstore, youth ministry wing
-- Created `isWorshipType()` helper to share form/PDF logic between both worship types; renamed Catholic label to "Places of Worship (Catholic)"
-- Fixed Summary page score readability: separated `getScoreRowBgColor` (subtle 50% opacity tints for table rows) from `getScoreBgColor` (100-level tints for badge pills); added brighter dark-mode score text colors in globals.css
-- Version: 0.15.1
 
 ### 2026-04-20 — School CPTED Types (Elementary / Middle / High / Combined)
 - Added 4 school `PropertyType` variants. Motivation: Volusia summer 2026 field season — SROs need a dedicated school template, not residential-adapted.
