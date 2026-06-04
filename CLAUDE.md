@@ -260,9 +260,10 @@ This requires building a knowledge base mapping each of the 64 checklist items t
 
 ## Current Status
 
-**v0.24.1 deployed.** Commercial Office template completed a pre-deployment audit pass (2026-05-19) ahead of the 2026-05-20 Volusia insurance HQ walkthrough. Item count is still 156 (dropped 1 duplicate, added the missing 2'/6' rule item). Five findings batched in v0.24.0: lighting items now scored only from the Night tab (not Exterior/Interior); plain-English replacements for "stall" / "stall striping" jargon; the 10%/5-ft ground-floor-window item re-tagged interior with a `Verify:` hint for mirrored-glazing properties; missing 2'/6' landscape rule added to Z3 Natural Surveillance; plain-language MDF/IDF explanations everywhere those abbreviations appear; and `isNightItem` no longer pulls Z7 interior lighting (stairwells, floor lobbies) into Night where the assessor has no after-hours access. v0.24.1 patched a Home dashboard bug — list now shows `date_of_assessment` (the field edited in Edit Info) instead of `created_at`, with safe local-midnight parsing for `YYYY-MM-DD` strings so the date doesn't render a day early in Eastern time.
+**v0.24.2 deployed.** Patch fix for the PDF report date — the cover-page "Assessment Date" and the assessor signature-line date were both rendering a day early in Eastern time (e.g. May 19 instead of May 20 on the 1001 Broadway report). Same UTC-midnight parsing footgun fixed for Home.tsx in v0.24.1; this round applies the same local-midnight fix to `formatDate` in `pdf.ts`. One function change covers both PDF spots since they both route through it. Prior context: v0.24.0 batched 5 commercial findings ahead of the 2026-05-20 Volusia insurance HQ walkthrough; v0.24.1 patched the Home dashboard to show `date_of_assessment` instead of `created_at` with safe local-midnight parsing.
 
 **Remaining items / To-Do:**
+- **Remove the 20 out-of-scope items** from the CPTED scope audit (worship 2, christian 3, schools 3, commercial Z11 12) — team decision 2026-05-21, deferred. Full work order: `files(1)/cpted-scope-audit.md`. Then a separate guidance-prose cleanup pass.
 - Update server-side zone data + PDF for townhome, worship, Christian church, school, and commercial-office assessments (server still residential-only)
 - Voice notes feature (planned)
 - Server-side report storage (planned)
@@ -274,6 +275,20 @@ This requires building a knowledge base mapping each of the 64 checklist items t
 Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch: `main`)
 
 ## Session Log
+
+### 2026-06-03 — PDF Report Date Fix (v0.24.2)
+- User reported the 1001 Broadway PDF report showed the assessment date as May 19 (both cover page and signature line) when the stored value was May 20. Same UTC-midnight footgun as v0.24.1 — `new Date("2026-05-20")` parses as UTC, renders as previous day in Eastern time.
+- Fix: `formatDate` in `cpted-assessor/src/services/pdf.ts` now detects `YYYY-MM-DD` and appends `T00:00:00` to force local-midnight parsing (same pattern as Home.tsx). Single edit covers both the cover-page Assessment Date (`pdf.ts:259`) and the signature date (`pdf.ts:1116`) since both route through `formatDate`.
+- Bumped patch 0.24.1 → 0.24.2 (package.json + Home.tsx footer). Deployed via `./deploy.sh`; build clean, container recreated.
+- Note: changes uncommitted at session close. Working tree also still carries the `files(1)/cpted-scope-audit.md` work order from the 2026-05-21 audit (untracked) and the v0.24.1 changes that hadn't been committed yet.
+
+### 2026-05-21 — CPTED Scope Audit (no code changes)
+- The team decided to revert from the hybrid CPTED + target-hardening approach to **strictly CPTED** content — liability driver: assessors hold the **Florida Attorney General's Office CPTED Practitioner designation**, a narrow CPTED-specific credential. Recommending outside it is an attack surface.
+- Ran a parallel multi-agent audit tagging all **594 checklist items** across all 6 templates against the Crowe three-form CPTED taxonomy. Result: **531 clean in-scope, 33 borderline (keep/reframe), 10 school statutory (keep), 20 out of scope**. 95% already defensible CPTED — a wholesale revert would be wrong; the fix is surgical.
+- Key doctrinal point: strict CPTED is NOT "natural strategies only" — access control and surveillance each have *mechanical* (locks, CCTV, card access) and *organized* (guards, visitor mgmt) forms. Locks/CCTV/lighting/fencing are all in scope. The genuinely out-of-scope content is all **emergency management** (plans, drills, training, response teams).
+- **Decision: remove the 20 out-of-scope items** — concentrated in 3 hotspots: commercial Zone 11 "Workplace Violence & Active-Threat Readiness" (12), worship/christian "Target Hardening & Emergency Preparedness" principle (5), school Zone 10 "Planning & Drills" (3). Deferred — not started this session.
+- Full work order with exact item text + implementation notes: `files(1)/cpted-scope-audit.md`.
+- Data correction discovered during audit: townhome template is **71 items**, not the "~67" previously recorded.
 
 ### 2026-05-19 — Commercial Audit Refinements (v0.23.3 → v0.24.1) + Dashboard Date Fix
 - Field-driven audit pass on the commercial template ahead of tomorrow's (2026-05-20) Volusia insurance HQ walkthrough. Five findings collected in `files(1)/commercial-audit-followups.md` during the audit, then batched as v0.24.0; date-bug follow-up shipped as v0.24.1.
@@ -305,20 +320,3 @@ Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch:
 - Open questions flagged: customer-walk-in vs. employee-only (affects Z5 ~5 items, most consequential), smoking-area N/A handling, HVM depth, drone/UAS scope, cyber-physical depth, intentional Z5/Z7/Z10/Z11 overlap, Florida statute (none apparent — no commercial analog to school hardening law), N/A-vs-1 for Z11 program items, exterior/interior phase tagging.
 - Next session: resolve open questions, then implement `commercial-office-zones.ts` + `commercial-office-item-guidance.ts`, wire `commercial_office` into `zone-registry.ts`, add form/PDF labels (likely Company Name / Facilities or Security Director / Main Office Phone), tag interior items in `item-phases.ts`.
 
-### 2026-04-20 — School CPTED Types (Elementary / Middle / High / Combined)
-- Added 4 school `PropertyType` variants. Motivation: Volusia summer 2026 field season — SROs need a dedicated school template, not residential-adapted.
-- New files: `src/data/school-zones.ts` (10-zone template with `SchoolBand` item tags, builder produces `ELEMENTARY_SCHOOL_ZONES`, `MIDDLE_SCHOOL_ZONES`, `HIGH_SCHOOL_ZONES`, `COMBINED_SCHOOL_ZONES`), `src/data/school-item-guidance.ts` (150 items × standard+improvement).
-- Zones: Campus Perimeter & Approach · Parking, Drop-off & Bus Loops · Grounds, Playgrounds & Outdoor · Building Exterior & Public Entry · Reception, Visitor Mgmt & Admin · Interior Corridors, Stairs & Lobbies · Classrooms & Instructional · Assembly & Support · Restrooms & Utility · Safety Systems, Policies & Emergency Readiness.
-- Florida statute items folded in: Alyssa's Law MPAS (PSAP-integrated), HB 301 digital mapping, MSD Act Threat Assessment Team, HB 1421 campus hardening (fortified vestibule, ballistic glazing, interior-lockable classroom doors, exterior-visible classroom numbering), SRO/Guardian coverage, FortifyFL, School Safety Specialist. Item counts: elementary 140, middle 146, high 148, combined 150.
-- Band tagging: student parking lot + CTE labs are `high/combined` only; playground items are `elementary/combined` only; locker rooms + lockers + auditorium backstage are `middle/high/combined`. Unfiltered items apply to all bands so duplicate across school types carries state cleanly.
-- Wired `zone-registry.ts` with all 4 types + `isSchoolType()` helper. Updated `NewAssessment.tsx` (optgroup-grouped dropdown, School Name / Principal / Main Office Phone labels), `EditAssessmentInfo.tsx` (same dynamic labels), `pdf.ts` (per-type report title, school ownerLabel/contactLabel/filename prefix, school-aware narrative text). `item-phases.ts` gained ~70 school interior items so the walkthrough phase filter works properly.
-- Fence auto-rec already guarded to residential-only — no school code path needed. `maintenance` principle is used across all school zones, so quick-wins generator picks up maintenance items organically.
-- Deployed 0.19.0, then patched to 0.19.1 correcting "3ft" → "2ft" in the CPTED landscape rule (2'/6' rule — shrubs below 2 ft, canopies above 6 ft) to match residential code. Source doc: `files(1)/CPTED SCHOOL EVAL.docx` (Volusia Sheriff format, San Benito HS example). Typecheck + production build pass clean.
-
-### 2026-04-17 — Townhome Type + Duplicate/Move Photos + Walkthrough Phase Filter
-- Added `townhome` PropertyType with 7 zones, ~67 items. New "Shared Boundaries" zone replaces Side Yards for attached housing (shared walls, breezeways, HOA utilities). Townhome item text mirrors residential verbatim where CPTED concept is identical so duplicate carries state cleanly. New files: `townhome-zones.ts`, `townhome-item-guidance.ts`; added `isResidentialType()` helper.
-- Built `services/duplicate.ts` — clones an assessment with new UUIDs, matches items by `zone_key+principle+item_text` with a residential↔townhome zone remap. Unmatched photos fall back to the first item in the mapped target zone (no photo loss). `DuplicateResultDialog.tsx` shows stats + re-homed photos list. Generic "Duplicate" button on Home (originally "Duplicate as Townhome", widened for re-assessment/fix use cases).
-- Added `PhotoMoveModal.tsx` + `movePhoto()` service. "Move to…" button in PhotoViewer re-assigns any photo to any item in the assessment — the correct fix for photos that landed in a fallback zone after duplication.
-- Added exterior/interior walkthrough phase filter. `item-phases.ts` classifies each item text via an `INTERIOR_ITEMS` Set + `getItemPhase()` helper. Three-way toggle in the Assessment main area drives `ZoneView` item visibility and `ZoneSidebar` completion dots. Persisted in `localStorage('cpted-phase-filter')`.
-- Replaced Summary zone-row tint with a colored badge pill for the Avg Score cell; removed unused `getScoreRowBgColor` from `scoring.ts`.
-- Versions shipped: 0.16.0, 0.16.1, 0.16.2, 0.17.0, 0.18.0, 0.18.1

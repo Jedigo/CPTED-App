@@ -74,7 +74,8 @@ function formatTimeOfAssessment(time: string): string {
 
 function formatDate(isoString: string): string {
   if (!isoString) return 'N/A';
-  const d = new Date(isoString);
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(isoString);
+  const d = dateOnly ? new Date(isoString + 'T00:00:00') : new Date(isoString);
   return d.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
