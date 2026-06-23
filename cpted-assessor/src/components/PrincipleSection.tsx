@@ -1,12 +1,17 @@
 import { useState } from 'react';
-import type { ZonePrinciple, ItemScore } from '../types';
+import type { ZonePrinciple, ItemScore, SchoolRating } from '../types';
 import ChecklistItem from './ChecklistItem';
 
 interface PrincipleSectionProps {
   principle: ZonePrinciple;
   itemScores: ItemScore[];
-  onScoreChange: (itemId: string, score: number | null, isNa: boolean) => void;
+  onScoreChange: (
+    itemId: string,
+    score: number | SchoolRating | null,
+    isNa: boolean,
+  ) => void;
   onNotesChange: (itemId: string, notes: string) => void;
+  ratingMode?: boolean;
 }
 
 export default function PrincipleSection({
@@ -14,6 +19,7 @@ export default function PrincipleSection({
   itemScores,
   onScoreChange,
   onNotesChange,
+  ratingMode = false,
 }: PrincipleSectionProps) {
   const [expanded, setExpanded] = useState(true);
 
@@ -54,6 +60,7 @@ export default function PrincipleSection({
             <ChecklistItem
               key={itemScore.id}
               itemScore={itemScore}
+              ratingMode={ratingMode}
               onScoreChange={(score, isNa) =>
                 onScoreChange(itemScore.id, score, isNa)
               }

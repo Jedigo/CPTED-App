@@ -2,6 +2,22 @@ import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/database';
 import { getZonesForType } from '../data/zone-registry';
+import type { SchoolRating } from '../types';
+
+// Badge text + color for a numeric 1-5 score, a school Yes/No/UTO rating, N/A, or unscored.
+function itemBadge(
+  score: number | SchoolRating | null,
+  isNa: boolean,
+): { text: string; classes: string } {
+  if (isNa) return { text: 'N/A', classes: 'bg-ink/10 text-ink/40' };
+  if (score === null) return { text: '–', classes: 'bg-ink/5 text-ink/30 border border-ink/10' };
+  if (score === 'yes') return { text: 'Y', classes: 'bg-green-600 text-white' };
+  if (score === 'no') return { text: 'N', classes: 'bg-red-500 text-white' };
+  if (score === 'uto') return { text: 'UTO', classes: 'bg-gray-400 text-white' };
+  if (score <= 2) return { text: String(score), classes: 'bg-red-500 text-white' };
+  if (score === 3) return { text: '3', classes: 'bg-yellow-500 text-white' };
+  return { text: String(score), classes: 'bg-green-600 text-white' };
+}
 
 interface Props {
   open: boolean;
@@ -120,22 +136,17 @@ export default function PhotoMoveModal({
                             : 'hover:bg-blue-medium/5 active:bg-blue-medium/10'
                         }`}
                       >
-                        {/* Score badge */}
-                        <span
-                          className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
-                            item.is_na
-                              ? 'bg-ink/10 text-ink/40'
-                              : item.score === null
-                                ? 'bg-ink/5 text-ink/30 border border-ink/10'
-                                : item.score <= 2
-                                  ? 'bg-red-500 text-white'
-                                  : item.score === 3
-                                    ? 'bg-yellow-500 text-white'
-                                    : 'bg-green-600 text-white'
-                          }`}
-                        >
-                          {item.is_na ? 'N/A' : item.score ?? '–'}
-                        </span>
+                        {/* Score / rating badge */}
+                        {(() => {
+                          const badge = itemBadge(item.score, item.is_na);
+                          return (
+                            <span
+                              className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold ${badge.classes}`}
+                            >
+                              {badge.text}
+                            </span>
+                          );
+                        })()}
 
                         <div className="flex-1 min-w-0">
                           <p className="text-sm text-ink leading-snug line-clamp-2">

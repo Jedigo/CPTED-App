@@ -1,11 +1,16 @@
-import type { ZoneDefinition, ItemScore } from '../types';
+import type { ZoneDefinition, ItemScore, SchoolRating } from '../types';
 import ChecklistItem from './ChecklistItem';
 
 interface NightViewProps {
   zones: ZoneDefinition[];
   itemScoresByZone: Map<string, ItemScore[]>;
-  onScoreChange: (itemId: string, score: number | null, isNa: boolean) => void;
+  onScoreChange: (
+    itemId: string,
+    score: number | SchoolRating | null,
+    isNa: boolean,
+  ) => void;
   onNotesChange: (itemId: string, notes: string) => void;
+  ratingMode?: boolean;
 }
 
 export default function NightView({
@@ -13,6 +18,7 @@ export default function NightView({
   itemScoresByZone,
   onScoreChange,
   onNotesChange,
+  ratingMode = false,
 }: NightViewProps) {
   const zonesWithItems = zones
     .map((zone) => {
@@ -69,6 +75,7 @@ export default function NightView({
                   <ChecklistItem
                     key={itemScore.id}
                     itemScore={itemScore}
+                    ratingMode={ratingMode}
                     onScoreChange={(score, isNa) =>
                       onScoreChange(itemScore.id, score, isNa)
                     }

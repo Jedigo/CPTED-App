@@ -3,9 +3,9 @@ import { useParams, Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/database';
-import { getZonesForType, isCommercialType } from '../data/zone-registry';
+import { getZonesForType, isCommercialType, isSchoolType } from '../data/zone-registry';
 import { getItemPhase, isNightItem, type Phase } from '../data/item-phases';
-import type { ItemScore } from '../types';
+import type { ItemScore, SchoolRating } from '../types';
 
 type PhaseFilter = 'all' | Phase | 'night';
 const PHASE_STORAGE_KEY = 'cpted-phase-filter';
@@ -62,6 +62,9 @@ export default function Assessment() {
     [assessment?.property_type],
   );
 
+  // Schools score with the Yes/No/UTO rating control instead of the 1-5 scale.
+  const ratingMode = assessment ? isSchoolType(assessment.property_type) : false;
+
   // Set active zone when zones are available, or reset if current key is invalid
   useEffect(() => {
     if (zones.length === 0) return;
@@ -84,6 +87,19 @@ export default function Assessment() {
       id ? db.item_scores.where('assessment_id').equals(id).toArray() : [],
     [id],
   );
+
+  // The phase filter is persisted globally in localStorage, so opening an
+  // assessment can restore a stale 'night' filter. Schools (and any type with
+  // no night items) have no Night tab to switch back from, which lands the user
+  // on an empty Night screen. Fall back to the normal view in that case.
+  useEffect(() => {
+    if (!assessment || !itemScores) return;
+    if (phaseFilter === 'night' && !itemScores.some(isNightItem)) {
+      handlePhaseChange(
+        isCommercialType(assessment.property_type) ? 'exterior' : 'all',
+      );
+    }
+  }, [assessment, itemScores, phaseFilter, handlePhaseChange]);
 
   // Initialize item scores on first load
   useEffect(() => {
@@ -168,7 +184,7 @@ export default function Assessment() {
   const activeItemScores = activeZoneKey ? (itemScoresByZone.get(activeZoneKey) || []) : [];
 
   const handleScoreChange = useCallback(
-    async (itemId: string, score: number | null, isNa: boolean) => {
+    async (itemId: string, score: number | SchoolRating | null, isNa: boolean) => {
       await db.item_scores.update(itemId, {
         score: isNa ? null : score,
         is_na: isNa,
@@ -402,7 +418,7 @@ export default function Assessment() {
         </div>
       </header>
 
-      <ScoreReference open={scoreRefOpen} onClose={() => setScoreRefOpen(false)} />
+      <ScoreReference open={scoreRefOpen} onClose={() => setScoreRefOpen(false)} ratingMode={ratingMode} />
       <EditAssessmentInfo assessment={assessment} open={editInfoOpen} onClose={() => setEditInfoOpen(false)} />
 
       {/* Body: sidebar + main content */}
@@ -480,6 +496,7 @@ export default function Assessment() {
               itemScoresByZone={itemScoresByZone}
               onScoreChange={handleScoreChange}
               onNotesChange={handleNotesChange}
+              ratingMode={ratingMode}
             />
           ) : (
             <ZoneView
@@ -488,6 +505,7 @@ export default function Assessment() {
               phaseFilter={phaseFilter}
               onScoreChange={handleScoreChange}
               onNotesChange={handleNotesChange}
+              ratingMode={ratingMode}
             />
           )}
 

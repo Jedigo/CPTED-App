@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
-import type { ItemScore, PropertyType, Recommendation } from '../types';
-import { getZonesForType, getItemGuidanceForType } from '../data/zone-registry';
+import type { ItemScore, PropertyType, Recommendation, SchoolRating } from '../types';
+import { getZonesForType, getItemGuidanceForType, isSchoolType } from '../data/zone-registry';
 
 // Principles where fixes tend to be low-cost / quick to implement
 const QUICK_WIN_PRINCIPLES = new Set([
@@ -48,15 +48,21 @@ export function buildDescription(context: ScoredItemContext, propertyType: Prope
   return heading;
 }
 
-export function getPriority(score: number): 'high' | 'medium' | 'low' {
+export function getPriority(score: number | SchoolRating): 'high' | 'medium' | 'low' {
+  // School ratings have no severity gradient — a 'No' finding is a recommendation
+  // at a flat medium priority; anything else isn't recommendation-worthy.
+  if (typeof score !== 'number') {
+    return score === 'no' ? 'medium' : 'low';
+  }
   if (score <= 1) return 'high';
   if (score <= 2) return 'medium';
   return 'low';
 }
 
 /**
- * Generate top recommendations from the worst-scoring items.
- * Picks the lowest-scored items (1s first, then 2s), up to `count`.
+ * Generate top recommendations from deficient items.
+ * - Numeric scale: lowest-scored items (1s first, then 2s, then 3s).
+ * - Schools (Yes/No/UTO): every 'No' item, ordered by zone, at medium priority.
  */
 export function generateRecommendations(
   allItems: ItemScore[],
@@ -66,12 +72,32 @@ export function generateRecommendations(
 ): Recommendation[] {
   const contextItems = getItemContext(allItems, propertyType);
 
+  if (isSchoolType(propertyType)) {
+    const noItems = contextItems
+      .filter((c) => c.item.score === 'no')
+      .sort(
+        (a, b) =>
+          a.zoneOrder - b.zoneOrder || a.item.item_order - b.item.item_order,
+      );
+
+    return noItems.slice(0, count).map((c, idx) => ({
+      id: uuidv4(),
+      assessment_id: assessmentId,
+      order: idx + 1,
+      description: buildDescription(c, propertyType),
+      priority: 'medium' as const,
+      type: 'recommendation' as const,
+    }));
+  }
+
   // Get items scored 1-3 (Critical, Deficient, Adequate), sorted worst first
   const candidates = contextItems
-    .filter((c) => c.item.score !== null && c.item.score <= 3)
+    .filter((c) => typeof c.item.score === 'number' && c.item.score <= 3)
     .sort((a, b) => {
       // Sort by score ascending (worst first), then by zone order
-      if (a.item.score! !== b.item.score!) return a.item.score! - b.item.score!;
+      const sa = a.item.score as number;
+      const sb = b.item.score as number;
+      if (sa !== sb) return sa - sb;
       return a.zoneOrder - b.zoneOrder;
     });
 
@@ -80,7 +106,7 @@ export function generateRecommendations(
     assessment_id: assessmentId,
     order: idx + 1,
     description: buildDescription(c, propertyType),
-    priority: getPriority(c.item.score!),
+    priority: getPriority(c.item.score as number),
     type: 'recommendation' as const,
   }));
 }
@@ -121,7 +147,7 @@ export function generateFenceRecommendation(
 
   // Check if any trigger item is scored N/A, 1, or 2
   const triggerItems = rearYardItems.filter(
-    (item) => item.is_na || (item.score !== null && item.score <= 2),
+    (item) => item.is_na || (typeof item.score === 'number' && item.score <= 2),
   );
 
   if (triggerItems.length === 0) return null;
@@ -153,12 +179,15 @@ export function generateQuickWins(
   count = 5,
   propertyType: PropertyType = 'single_family_residential',
 ): Recommendation[] {
+  // Schools don't use Quick Wins (no severity gradient to mine from Yes/No/UTO).
+  if (isSchoolType(propertyType)) return [];
+
   const contextItems = getItemContext(allItems, propertyType);
 
   // Items scored 2-3 from quick-win principles (maintenance, lighting, behavioral)
   const easyFixes = contextItems.filter(
     (c) =>
-      c.item.score !== null &&
+      typeof c.item.score === 'number' &&
       c.item.score >= 2 &&
       c.item.score <= 3 &&
       QUICK_WIN_PRINCIPLES.has(c.item.principle),
@@ -167,7 +196,6 @@ export function generateQuickWins(
   // Fallback: any item scored 3 (adequate — room for improvement, not urgent)
   const adequateItems = contextItems.filter(
     (c) =>
-      c.item.score !== null &&
       c.item.score === 3 &&
       !QUICK_WIN_PRINCIPLES.has(c.item.principle),
   );
@@ -185,7 +213,9 @@ export function generateQuickWins(
 
   // Sort: lowest score first, then by zone order
   combined.sort((a, b) => {
-    if (a.item.score! !== b.item.score!) return a.item.score! - b.item.score!;
+    const sa = a.item.score as number;
+    const sb = b.item.score as number;
+    if (sa !== sb) return sa - sb;
     return a.zoneOrder - b.zoneOrder;
   });
 
@@ -194,7 +224,7 @@ export function generateQuickWins(
     assessment_id: assessmentId,
     order: idx + 1,
     description: buildDescription(c, propertyType),
-    priority: c.item.score! <= 2 ? 'medium' as const : 'low' as const,
+    priority: (c.item.score as number) <= 2 ? 'medium' as const : 'low' as const,
     type: 'quick_win' as const,
   }));
 }

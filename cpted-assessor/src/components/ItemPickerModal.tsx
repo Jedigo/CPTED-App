@@ -5,7 +5,7 @@ import {
   buildDescription,
   getPriority,
 } from '../services/recommendations';
-import type { ItemScore, PropertyType, Recommendation, RecommendationType } from '../types';
+import type { ItemScore, PropertyType, Recommendation, RecommendationType, SchoolRating } from '../types';
 
 interface ItemPickerModalProps {
   open: boolean;
@@ -26,6 +26,26 @@ const SCORE_BADGE_COLORS: Record<number, string> = {
   4: 'bg-blue-500 text-white',
   5: 'bg-green-600 text-white',
 };
+
+// Badge text + color for either a numeric 1-5 score or a school Yes/No/UTO rating.
+function scoreBadge(score: number | SchoolRating | null): { text: string; classes: string } {
+  if (score === 'yes') return { text: 'Y', classes: 'bg-green-600 text-white' };
+  if (score === 'no') return { text: 'N', classes: 'bg-red-600 text-white' };
+  if (score === 'uto') return { text: 'UTO', classes: 'bg-gray-400 text-white' };
+  if (typeof score === 'number') {
+    return { text: String(score), classes: SCORE_BADGE_COLORS[score] ?? 'bg-ink/20 text-ink/60' };
+  }
+  return { text: '', classes: 'bg-ink/20 text-ink/60' };
+}
+
+// Worst-first rank so deficient items sort to the top in both scales.
+function scoreRank(score: number | SchoolRating | null): number {
+  if (typeof score === 'number') return score; // 1..5 ascending
+  if (score === 'no') return 0;
+  if (score === 'uto') return 1;
+  if (score === 'yes') return 2;
+  return 5;
+}
 
 export default function ItemPickerModal({
   open,
@@ -74,7 +94,7 @@ export default function ItemPickerModal({
     }
     // Sort items within each zone by score ascending (worst first)
     for (const group of groups.values()) {
-      group.items.sort((a, b) => (a.item.score ?? 5) - (b.item.score ?? 5));
+      group.items.sort((a, b) => scoreRank(a.item.score) - scoreRank(b.item.score));
     }
     return [...groups.entries()].sort((a, b) => a[1].zoneOrder - b[1].zoneOrder);
   }, [contextItems]);
@@ -109,7 +129,7 @@ export default function ItemPickerModal({
     // Build recommendations from selected items, sorted worst-first
     const selectedContexts = contextItems
       .filter((ctx) => selected.has(ctx.item.id))
-      .sort((a, b) => (a.item.score ?? 5) - (b.item.score ?? 5));
+      .sort((a, b) => scoreRank(a.item.score) - scoreRank(b.item.score));
 
     const recs: Recommendation[] = selectedContexts.map((ctx, idx) => ({
       id: uuidv4(),
@@ -230,10 +250,15 @@ export default function ItemPickerModal({
                                     : 'hover:bg-ink/3'
                             }`}
                           >
-                            {/* Score badge */}
-                            <span className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold ${SCORE_BADGE_COLORS[ctx.item.score ?? 3] ?? 'bg-ink/20 text-ink/60'}`}>
-                              {ctx.item.score}
-                            </span>
+                            {/* Score / rating badge */}
+                            {(() => {
+                              const badge = scoreBadge(ctx.item.score);
+                              return (
+                                <span className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold ${badge.classes}`}>
+                                  {badge.text}
+                                </span>
+                              );
+                            })()}
 
                             {/* Item text + principle */}
                             <div className="flex-1 min-w-0">

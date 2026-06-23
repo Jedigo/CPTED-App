@@ -11,6 +11,10 @@ interface RecommendationEditorProps {
   onChange: (items: Recommendation[]) => void;
   itemScores?: ItemScore[];
   propertyType?: PropertyType;
+  // Schools: every recommendation is a priority; the only distinction is whether
+  // it's flagged "High Priority". Replaces the 3-way High/Med/Low selector with a
+  // single toggle (on = 'high', off = 'medium').
+  highToggleOnly?: boolean;
 }
 
 const PRIORITY_OPTIONS: { value: Priority; label: string; colors: string }[] = [
@@ -41,6 +45,7 @@ export default function RecommendationEditor({
   onChange,
   itemScores,
   propertyType,
+  highToggleOnly = false,
 }: RecommendationEditorProps) {
   const label = type === 'recommendation' ? 'Recommendation' : 'Quick Win';
   const atMax = maxItems !== undefined && items.length >= maxItems;
@@ -163,26 +168,48 @@ export default function RecommendationEditor({
             className="w-full rounded-lg border border-ink/20 px-3 py-2 text-sm bg-surface outline-none focus:border-blue-medium focus:ring-2 focus:ring-blue-medium/30 resize-y"
           />
 
-          {/* Priority + Timeline row */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-xs font-bold text-ink/50 uppercase tracking-wide">
-              Priority
-            </span>
-            <div className="flex gap-1">
-              {PRIORITY_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => handleUpdate(index, { priority: opt.value })}
-                  className={`px-4 h-11 rounded-lg text-sm font-semibold border-2 transition-colors ${
-                    item.priority === opt.value ? opt.colors : UNSELECTED
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
+          {/* Priority row */}
+          {highToggleOnly ? (
+            // Schools: all items are priorities; toggle just flags the high ones.
+            <div className="flex items-center gap-3 flex-wrap">
+              <button
+                type="button"
+                aria-pressed={item.priority === 'high'}
+                onClick={() =>
+                  handleUpdate(index, {
+                    priority: item.priority === 'high' ? 'medium' : 'high',
+                  })
+                }
+                className={`px-4 h-11 rounded-lg text-sm font-semibold border-2 transition-colors ${
+                  item.priority === 'high'
+                    ? 'bg-red-600 text-white border-red-600'
+                    : UNSELECTED
+                }`}
+              >
+                {item.priority === 'high' ? '★ High Priority' : 'Mark High Priority'}
+              </button>
             </div>
-          </div>
+          ) : (
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="text-xs font-bold text-ink/50 uppercase tracking-wide">
+                Priority
+              </span>
+              <div className="flex gap-1">
+                {PRIORITY_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => handleUpdate(index, { priority: opt.value })}
+                    className={`px-4 h-11 rounded-lg text-sm font-semibold border-2 transition-colors ${
+                      item.priority === opt.value ? opt.colors : UNSELECTED
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       ))}
 

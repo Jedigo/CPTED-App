@@ -68,7 +68,8 @@ cpted-assessor/
 │   │   ├── ZoneView.tsx          # Active zone display (phase-filtered; empty state)
 │   │   ├── PrincipleSection.tsx  # Collapsible principle with items
 │   │   ├── ChecklistItem.tsx     # Single item: score buttons + photo + notes
-│   │   ├── ScoreButtons.tsx      # [1][2][3][4][5][N/A] tap targets
+│   │   ├── ScoreButtons.tsx      # [1][2][3][4][5][N/A] tap targets (non-school types)
+│   │   ├── RatingButtons.tsx     # [Yes][No][UTO] tap targets (school types)
 │   │   ├── PhotoCapture.tsx      # Camera integration
 │   │   ├── PhotoThumbnail.tsx    # Inline photo display
 │   │   ├── PhotoViewer.tsx       # Full-screen photo viewer with Move/Delete actions
@@ -185,8 +186,8 @@ The full checklist item text lives in `src/data/zones.ts`. Trimmed from 141 to 6
 ## Critical Rules
 
 1. `zones.ts`, `townhome-zones.ts`, `worship-zones.ts`, `christian-zones.ts`, `school-zones.ts`, `commercial-office-zones.ts` are the **source of truth** for checklist content; resolve via `zone-registry.ts`
-2. Scoring is **1-5** (not 0-5) — no zero score exists
-3. **N/A items excluded** from all score calculations
+2. Scoring is **1-5** (not 0-5) — no zero score exists. **EXCEPTION: school property types use a Yes/No/UTO checklist rating** (`ItemScore.score = 'yes' | 'no' | 'uto'`), not numbers. Branch on `isSchoolType()`; numeric helpers guard with `typeof score === 'number'`. See the School Yes/No/UTO section in MEMORY.md.
+3. **N/A items excluded** from all score calculations (schools use UTO instead of N/A — no separate N/A flag)
 4. Photos stored as **base64 data URL strings** in IndexedDB (NOT Blobs — Safari detaches Blob data from IndexedDB, making it unreadable)
 5. PDF must include the **liability waiver verbatim** (see project plan)
 6. PWA manifest app name: **"CPTED Assessor"**
@@ -260,7 +261,7 @@ This requires building a knowledge base mapping each of the 64 checklist items t
 
 ## Current Status
 
-**v0.24.2 deployed.** Patch fix for the PDF report date — the cover-page "Assessment Date" and the assessor signature-line date were both rendering a day early in Eastern time (e.g. May 19 instead of May 20 on the 1001 Broadway report). Same UTC-midnight parsing footgun fixed for Home.tsx in v0.24.1; this round applies the same local-midnight fix to `formatDate` in `pdf.ts`. One function change covers both PDF spots since they both route through it. Prior context: v0.24.0 batched 5 commercial findings ahead of the 2026-05-20 Volusia insurance HQ walkthrough; v0.24.1 patched the Home dashboard to show `date_of_assessment` instead of `created_at` with safe local-midnight parsing.
+**v0.29.0 deployed.** School assessments now use a **Yes/No/UTO checklist rating** instead of the 1-5 scale (team trained on the National Institute of Crime Prevention school survey: `files(1)/CPTED SCHOOL EVAL.docx`). Schools-only, gated on `isSchoolType()`; all other property types keep 1-5 untouched. Plus a full **PDF report redesign** (applies to all types): formal centered cover (star badge + "Volusia Sheriff's Office" / "Domestic Security Unit" masthead + "Crime Prevention Through Environmental Design Report" + property name/address, navy top/bottom bands, vertically centered between bands, no footer), an "Understanding CPTED" intro page, a page-numbered Table of Contents (numbering starts at the TOC), a red "CONFIDENTIAL" header on every page, and a fixed footer "CPTED Report - Volusia Sheriff's Office". School reports: no aggregate score, recommendations driven by "No" items (uncapped, no auto-generate, single High-Priority toggle), Confidentiality-of-Report section folded onto the waiver page. New star badge logo at `public/logos/volusia_sheriff_badge_star.png`.
 
 **Remaining items / To-Do:**
 - **Remove the 20 out-of-scope items** from the CPTED scope audit (worship 2, christian 3, schools 3, commercial Z11 12) — team decision 2026-05-21, deferred. Full work order: `files(1)/cpted-scope-audit.md`. Then a separate guidance-prose cleanup pass.
@@ -275,6 +276,13 @@ This requires building a knowledge base mapping each of the 64 checklist items t
 Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch: `main`)
 
 ## Session Log
+
+### 2026-06-23 — School Yes/No/UTO Rating + PDF Report Redesign (v0.25.0 → v0.29.0)
+- **School rating system (schools only):** replaced 1-5 scoring with **Yes/No/UTO** for the 4 school types, gated on `isSchoolType()`. Widened `ItemScore.score` to `number | SchoolRating | null` (`SchoolRating = 'yes'|'no'|'uto'`); `is_na` stays false for schools (UTO replaces N/A). New `RatingButtons.tsx`; `ChecklistItem` takes `ratingMode` threaded via `ZoneView`/`NightView`/`PrincipleSection`. Rating helpers in `scoring.ts` (`isSchoolRating`, `getRatingLabel/Color/BgColor`); `calculateAverage` made numeric-safe (`typeof score === 'number'`) so schools yield null aggregate without NaN. No migration — old 1-5 school assessments start fresh.
+- **Summary (schools):** no overall/zone scores ("Checklist Progress" card + zone completion table), Quick Wins hidden, PDF gate keys off "≥1 rated item" (overall_score always null). **Recommendations reworked (schools):** auto-generate removed, uncapped (no 5 cap), "Top" dropped → just "Recommendations", priority selector → single High-Priority toggle (`highToggleOnly` prop on `RecommendationEditor`; on='high', off='medium').
+- **PDF redesign (`pdf.ts`, all property types):** formal centered cover (new star badge, navy top/bottom bands, masthead, vertically centered, no footer); "Understanding CPTED" intro page (unnumbered front matter); page-numbered **Table of Contents** (drawn last via reserved page + `setPage`; numbering starts at TOC via `FRONT_MATTER_PAGES=2` offset); **footers stamped in one final pass** over all pages (fixed missing-page-number bug); red **CONFIDENTIAL** header on every page except cover; fixed footer text "CPTED Report - Volusia Sheriff's Office" (removed `getReportTitle`/`getFooterText`). School zone bodies bucket by rating (No→red findings w/ guidance, UTO→gray, Yes→green compliant); Confidentiality-of-Report section folded onto the waiver page; item text bumped 8pt→10pt for readability.
+- Versions: 0.25.0 (rating system) → 0.25.1 (stale night-filter fallback) → 0.26.x (cover+TOC) → 0.27.x (cover polish + new badge) → 0.28.x (recs rework) → 0.29.0 (cover centering, bigger text, footer, CONFIDENTIAL). All deployed via `./deploy.sh`; build + lint clean throughout.
+- New file: `cpted-assessor/public/logos/volusia_sheriff_badge_star.png` (source dropped at repo-root `logos/image(2).png`, left untracked).
 
 ### 2026-06-03 — PDF Report Date Fix (v0.24.2)
 - User reported the 1001 Broadway PDF report showed the assessment date as May 19 (both cover page and signature line) when the stored value was May 20. Same UTC-midnight footgun as v0.24.1 — `new Date("2026-05-20")` parses as UTC, renders as previous day in Eastern time.
@@ -310,13 +318,4 @@ Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch:
 - **v0.22.0** — Field-resolved customer-walk-in profile (locked employee-only + customers walk in for policy discussions). Added 4 items: Z5 customer waiting-area visibility, Z5 customer meeting-room sight line OR panic button, Z5 customer-vs-vendor sign-in distinction, Z11 de-escalation training for customer-facing staff. **User-corrected framing:** the meeting-room item was originally pitched as PII protection — user pushed back ("this is security and CPTED, not privacy"). Reframe employee-safety items as natural surveillance + duress capability, not data protection.
 - **v0.23.0** — Grouped EXTERIOR/INTERIOR sidebar for commercial only (user asked for "tabs not filter"). `ZoneSidebar` accepts optional `groupedSections` prop; commercial path computes per-phase zone entries. Z6 Loading/Mail appears in both sections. Top phase filter hidden for commercial — sidebar drives phase. Section-aware Previous/Next buttons cross sections at boundaries ("Start INTERIOR →", "← Back to EXTERIOR"). Commercial auto-defaults to 'exterior' phase on entry.
 - **v0.23.1–v0.23.2** — Field-driven mis-tag fix. User flagged that "Cameras provide overlapping coverage" can't be verified from outside. Audited Z1/Z2/Z4/Z6 and re-phased 11 items requiring SOC/alarm-panel/interview verification to interior. Added `VERIFICATION_HINTS` Map in `item-phases.ts` + small blue **"Verify:"** hint card on those items in `ChecklistItem.tsx`. Same verification context appended to guidance `standard` field so PDF report reflects it too.
-
-### 2026-05-04 — Commercial Office Property Type — Research Phase
-- New CPTED template scoped: large single-tenant insurance HQ (~157,000 sq ft, 4 floors, 11 acres, surface parking only, customer-walk-in question still open). Volusia field season driver.
-- Research-only session — no code. Delegated to a research agent that produced `files(1)/commercial_office_research_draft.md` (452 lines, 11 zones / 152 items, sits in 140–160 target).
-- Zones drafted: Site Perimeter (12) · Surface Parking (18) · Grounds & Outdoor (11) · Building Exterior & Envelope (18) · Lobby & Reception (14) · Loading Dock & Mailroom (13) · Vertical Circulation (12) · Office Floors (13) · Critical & Restricted (13) · Building Systems & Security Tech (10) · Workplace Violence & Active-Threat Readiness (18).
-- Design calls: lighting folded into per-zone principle (matches residential/school); loading dock + mailroom merged (BOMA/GSA/ISC convention); critical/restricted kept as one zone (server/MDF/IDF/HR/utility share CPTED problem profile); active-threat is its own zone per user request.
-- Sources used: Threshold Security CPTED office checklist (most directly translatable item language — 10% window-sign rule, 5 ft furniture clearance, 1-inch deadbolt throw, hinge security), FEMA 426/427/430 (envelope + standoff), CISA Active Shooter Action Guide 2025 + ASIS WVPI AA-2020 (Z11), BOMA + GSA Mail Center Guide 5e + ISC Mail Screening (Z6), NFPA 730 (zone hierarchy).
-- Open questions flagged: customer-walk-in vs. employee-only (affects Z5 ~5 items, most consequential), smoking-area N/A handling, HVM depth, drone/UAS scope, cyber-physical depth, intentional Z5/Z7/Z10/Z11 overlap, Florida statute (none apparent — no commercial analog to school hardening law), N/A-vs-1 for Z11 program items, exterior/interior phase tagging.
-- Next session: resolve open questions, then implement `commercial-office-zones.ts` + `commercial-office-item-guidance.ts`, wire `commercial_office` into `zone-registry.ts`, add form/PDF labels (likely Company Name / Facilities or Security Director / Main Office Phone), tag interior items in `item-phases.ts`.
 

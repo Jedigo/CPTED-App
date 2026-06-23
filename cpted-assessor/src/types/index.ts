@@ -10,6 +10,10 @@ export type PropertyType =
   | 'combined_school'
   | 'commercial_office'
 export type AssessmentType = 'initial' | 'follow_up' | 're_assessment'
+// School assessments use a Yes/No/UTO (Unable To Observe) checklist rating
+// instead of the 1-5 numeric scale. Stored in ItemScore.score for school
+// property types; numeric scores are used for every other property type.
+export type SchoolRating = 'yes' | 'no' | 'uto'
 export type TimeOfAssessment = 'daytime' | 'nighttime' | 'both'
 export type Priority = 'high' | 'medium' | 'low'
 export type RecommendationType = 'recommendation' | 'quick_win'
@@ -60,7 +64,9 @@ export interface ItemScore {
   principle: string
   item_text: string
   item_order: number
-  score: number | null
+  // Numeric 1-5 for most property types; a SchoolRating string for schools.
+  // null = not yet scored. is_na stays false for school items (UTO is a value).
+  score: number | SchoolRating | null
   is_na: boolean
   notes: string
   photo_ids: string[]

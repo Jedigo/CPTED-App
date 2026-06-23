@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
-import type { ItemScore } from '../types';
+import type { ItemScore, SchoolRating } from '../types';
 import ScoreButtons from './ScoreButtons';
+import RatingButtons from './RatingButtons';
 import PhotoThumbnail from './PhotoThumbnail';
 import PhotoViewer from './PhotoViewer';
 import { savePhoto, deletePhoto } from '../services/photos';
@@ -8,14 +9,17 @@ import { getVerificationHint } from '../data/item-phases';
 
 interface ChecklistItemProps {
   itemScore: ItemScore;
-  onScoreChange: (score: number | null, isNa: boolean) => void;
+  onScoreChange: (score: number | SchoolRating | null, isNa: boolean) => void;
   onNotesChange: (notes: string) => void;
+  // Schools use the Yes/No/UTO rating control instead of the 1-5 buttons.
+  ratingMode?: boolean;
 }
 
 export default function ChecklistItem({
   itemScore,
   onScoreChange,
   onNotesChange,
+  ratingMode = false,
 }: ChecklistItemProps) {
   const [showNote, setShowNote] = useState(!!itemScore.notes);
   const [noteText, setNoteText] = useState(itemScore.notes);
@@ -87,11 +91,18 @@ export default function ChecklistItem({
       })()}
 
       <div className="flex items-center gap-2 flex-wrap">
-        <ScoreButtons
-          score={itemScore.score}
-          isNa={itemScore.is_na}
-          onSelect={onScoreChange}
-        />
+        {ratingMode ? (
+          <RatingButtons
+            score={itemScore.score}
+            onSelect={(rating) => onScoreChange(rating, false)}
+          />
+        ) : (
+          <ScoreButtons
+            score={typeof itemScore.score === 'number' ? itemScore.score : null}
+            isNa={itemScore.is_na}
+            onSelect={onScoreChange}
+          />
+        )}
 
         <button
           type="button"

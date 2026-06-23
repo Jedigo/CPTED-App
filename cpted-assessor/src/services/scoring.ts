@@ -1,18 +1,25 @@
-import type { ItemScore } from '../types';
+import type { ItemScore, SchoolRating } from '../types';
 import { db } from '../db/database';
 
 // --- Pure calculation functions (no DB, testable) ---
 
-/** Filter to items that have a numeric score (not null, not N/A) */
+/** Filter to items that have been rated (numeric score OR school rating; not N/A) */
 export function getScoredItems(items: ItemScore[]): ItemScore[] {
   return items.filter((s) => s.score !== null && !s.is_na);
 }
 
-/** Average of scored items, null if none scored */
+/**
+ * Average of numerically-scored items, null if none.
+ * School ratings ('yes'/'no'/'uto') are non-numeric and excluded — so school
+ * assessments naturally yield a null average (no aggregate score), and the
+ * numeric reduce below never sees a string.
+ */
 export function calculateAverage(items: ItemScore[]): number | null {
-  const scored = getScoredItems(items);
+  const scored = items.filter(
+    (s) => typeof s.score === 'number' && !s.is_na,
+  );
   if (scored.length === 0) return null;
-  return scored.reduce((sum, s) => sum + s.score!, 0) / scored.length;
+  return scored.reduce((sum, s) => sum + (s.score as number), 0) / scored.length;
 }
 
 /** Average of scored items within a specific principle */
@@ -97,6 +104,36 @@ export function getScoreLabel(score: number): string {
   if (score < 3.5) return 'Adequate';
   if (score < 4.5) return 'Good';
   return 'Excellent';
+}
+
+// --- School Yes/No/UTO rating helpers ---
+
+/** Type guard: true when a score value is a school rating string */
+export function isSchoolRating(
+  score: number | SchoolRating | null,
+): score is SchoolRating {
+  return score === 'yes' || score === 'no' || score === 'uto';
+}
+
+/** Human-readable label for a school rating */
+export function getRatingLabel(rating: SchoolRating): string {
+  if (rating === 'yes') return 'Yes';
+  if (rating === 'no') return 'No';
+  return 'Unable to Observe';
+}
+
+/** Tailwind text color class for a school rating */
+export function getRatingColor(rating: SchoolRating): string {
+  if (rating === 'yes') return 'text-green-700 dark:text-green-400';
+  if (rating === 'no') return 'text-red-700 dark:text-red-400';
+  return 'text-ink/50';
+}
+
+/** Tailwind background color class for a school rating (badge pill) */
+export function getRatingBgColor(rating: SchoolRating): string {
+  if (rating === 'yes') return 'bg-green-100 dark:bg-green-950';
+  if (rating === 'no') return 'bg-red-100 dark:bg-red-950';
+  return 'bg-ink/10';
 }
 
 // --- Persistence functions (read/write DB) ---

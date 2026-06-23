@@ -1,4 +1,4 @@
-import type { ZoneDefinition, ItemScore } from '../types';
+import type { ZoneDefinition, ItemScore, SchoolRating } from '../types';
 import PrincipleSection from './PrincipleSection';
 import ZoneSummary from './ZoneSummary';
 
@@ -8,10 +8,11 @@ interface ZoneViewProps {
   phaseFilter?: 'all' | 'exterior' | 'interior';
   onScoreChange: (
     itemId: string,
-    score: number | null,
+    score: number | SchoolRating | null,
     isNa: boolean,
   ) => void;
   onNotesChange: (itemId: string, notes: string) => void;
+  ratingMode?: boolean;
 }
 
 export default function ZoneView({
@@ -20,6 +21,7 @@ export default function ZoneView({
   phaseFilter = 'all',
   onScoreChange,
   onNotesChange,
+  ratingMode = false,
 }: ZoneViewProps) {
   const renderedPrinciples = zone.principles
     .map((principle) => ({
@@ -53,13 +55,14 @@ export default function ZoneView({
             key={principle.key}
             principle={principle}
             itemScores={items}
+            ratingMode={ratingMode}
             onScoreChange={onScoreChange}
             onNotesChange={onNotesChange}
           />
         ))
       )}
 
-      <ZoneSummary itemScores={itemScores} />
+      <ZoneSummary itemScores={itemScores} ratingMode={ratingMode} />
     </div>
   );
 }

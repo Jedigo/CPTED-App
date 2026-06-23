@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/database';
-import { getZonesForType } from '../data/zone-registry';
+import { getZonesForType, isSchoolType } from '../data/zone-registry';
 import {
   persistAllScores,
   getScoreColor,
@@ -241,6 +241,13 @@ export default function Summary() {
   const overall = assessment.overall_score;
   const isComplete = assessment.status === 'completed';
 
+  // Schools use Yes/No/UTO and carry no aggregate score. The PDF gate keys off
+  // "has at least one rated item" instead of overall_score (always null here).
+  const isSchool = isSchoolType(assessment.property_type);
+  const ratedCount = (itemScores ?? []).filter((s) => s.score !== null).length;
+  const totalItems = (itemScores ?? []).length;
+  const canGeneratePDF = isSchool ? ratedCount > 0 : overall !== null;
+
   return (
     <div className="min-h-screen bg-blue-pale">
       {/* Header */}
@@ -288,36 +295,49 @@ export default function Summary() {
       <EditAssessmentInfo assessment={assessment} open={editInfoOpen} onClose={() => setEditInfoOpen(false)} />
 
       <div className="max-w-4xl mx-auto px-6 py-8 space-y-8">
-        {/* Overall Score Card */}
-        <div className="bg-surface rounded-xl border border-ink/10 shadow-sm p-8 text-center">
-          <h2 className="text-sm font-bold text-ink/60 uppercase tracking-wide mb-2">
-            Overall Score
-          </h2>
-          {overall !== null ? (
-            <>
-              <p className={`text-5xl font-bold ${getScoreColor(overall)}`}>
-                {overall.toFixed(1)}
-              </p>
-              <p className="text-sm text-ink/40 mt-1">/ 5.0</p>
-              <span
-                className={`inline-block mt-3 px-4 py-1.5 rounded-full text-sm font-semibold ${getScoreBgColor(overall)} ${getScoreColor(overall)}`}
-              >
-                {getScoreLabel(overall)}
-              </span>
-            </>
-          ) : (
-            <>
-              <p className="text-5xl font-bold text-ink/20">&mdash;</p>
-              <p className="text-sm text-ink/40 mt-1">No scores yet</p>
-            </>
-          )}
-        </div>
+        {/* Overall Score / Progress Card */}
+        {isSchool ? (
+          <div className="bg-surface rounded-xl border border-ink/10 shadow-sm p-8 text-center">
+            <h2 className="text-sm font-bold text-ink/60 uppercase tracking-wide mb-2">
+              Checklist Progress
+            </h2>
+            <p className="text-5xl font-bold text-navy">
+              {ratedCount}
+              <span className="text-2xl font-normal text-ink/40"> / {totalItems}</span>
+            </p>
+            <p className="text-sm text-ink/40 mt-1">items rated (Yes / No / UTO)</p>
+          </div>
+        ) : (
+          <div className="bg-surface rounded-xl border border-ink/10 shadow-sm p-8 text-center">
+            <h2 className="text-sm font-bold text-ink/60 uppercase tracking-wide mb-2">
+              Overall Score
+            </h2>
+            {overall !== null ? (
+              <>
+                <p className={`text-5xl font-bold ${getScoreColor(overall)}`}>
+                  {overall.toFixed(1)}
+                </p>
+                <p className="text-sm text-ink/40 mt-1">/ 5.0</p>
+                <span
+                  className={`inline-block mt-3 px-4 py-1.5 rounded-full text-sm font-semibold ${getScoreBgColor(overall)} ${getScoreColor(overall)}`}
+                >
+                  {getScoreLabel(overall)}
+                </span>
+              </>
+            ) : (
+              <>
+                <p className="text-5xl font-bold text-ink/20">&mdash;</p>
+                <p className="text-sm text-ink/40 mt-1">No scores yet</p>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Zone Scores Table */}
         <div className="bg-surface rounded-xl border border-ink/10 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-ink/10">
             <h2 className="text-sm font-bold text-ink/60 uppercase tracking-wide">
-              Zone Scores
+              {isSchool ? 'Zones' : 'Zone Scores'}
             </h2>
           </div>
           <table className="w-full">
@@ -325,8 +345,8 @@ export default function Summary() {
               <tr className="text-left text-xs font-bold text-ink/50 uppercase tracking-wide">
                 <th className="px-6 py-3">#</th>
                 <th className="px-6 py-3">Zone</th>
-                <th className="px-6 py-3 text-center">Avg Score</th>
-                <th className="px-6 py-3 text-center">Items Scored</th>
+                {!isSchool && <th className="px-6 py-3 text-center">Avg Score</th>}
+                <th className="px-6 py-3 text-center">{isSchool ? 'Items Rated' : 'Items Scored'}</th>
                 <th className="px-6 py-3 text-center">Status</th>
               </tr>
             </thead>
@@ -341,17 +361,19 @@ export default function Summary() {
                     <td className="px-6 py-3 text-sm font-medium text-ink">
                       {zs.zone_name}
                     </td>
-                    <td className="px-6 py-3 text-center">
-                      {zs.average_score !== null ? (
-                        <span
-                          className={`inline-block px-3 py-1 rounded-full text-sm font-bold ${getScoreBgColor(zs.average_score)} ${getScoreColor(zs.average_score)}`}
-                        >
-                          {zs.average_score.toFixed(1)}
-                        </span>
-                      ) : (
-                        <span className="text-sm text-ink/25">&mdash;</span>
-                      )}
-                    </td>
+                    {!isSchool && (
+                      <td className="px-6 py-3 text-center">
+                        {zs.average_score !== null ? (
+                          <span
+                            className={`inline-block px-3 py-1 rounded-full text-sm font-bold ${getScoreBgColor(zs.average_score)} ${getScoreColor(zs.average_score)}`}
+                          >
+                            {zs.average_score.toFixed(1)}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-ink/25">&mdash;</span>
+                        )}
+                      </td>
+                    )}
                     <td className="px-6 py-3 text-center text-sm text-ink/60">
                       {counts
                         ? `${counts.scored} / ${counts.total}`
@@ -375,8 +397,9 @@ export default function Summary() {
           </table>
         </div>
 
-        {/* Auto-generate button */}
-        {itemScores && itemScores.some((s) => s.score !== null) && (
+        {/* Auto-generate button — not offered for schools (Yes/No/UTO has no
+            severity ranking to auto-pick from; recommendations are curated by hand) */}
+        {!isSchool && itemScores && itemScores.some((s) => s.score !== null) && (
           <div className="space-y-2">
             <div className="bg-blue-light/50 rounded-xl border border-blue-medium/20 p-4 flex items-center justify-between gap-4">
               <div>
@@ -405,17 +428,18 @@ export default function Summary() {
           </div>
         )}
 
-        {/* Top Recommendations */}
+        {/* Recommendations (schools: uncapped, high-priority toggle only) */}
         <div className="bg-surface rounded-xl border border-ink/10 shadow-sm p-6">
           <h2 className="text-sm font-bold text-ink/60 uppercase tracking-wide mb-3">
-            Top Recommendations
+            {isSchool ? 'Recommendations' : 'Top Recommendations'}
           </h2>
           {id && (
             <RecommendationEditor
               items={recommendations}
               type="recommendation"
               assessmentId={id}
-              maxItems={5}
+              maxItems={isSchool ? undefined : 5}
+              highToggleOnly={isSchool}
               onChange={handleRecsChange}
               itemScores={itemScores ?? []}
               propertyType={assessment.property_type}
@@ -423,22 +447,24 @@ export default function Summary() {
           )}
         </div>
 
-        {/* Quick Wins */}
-        <div className="bg-surface rounded-xl border border-ink/10 shadow-sm p-6">
-          <h2 className="text-sm font-bold text-ink/60 uppercase tracking-wide mb-3">
-            Quick Wins
-          </h2>
-          {id && (
-            <RecommendationEditor
-              items={quickWins}
-              type="quick_win"
-              assessmentId={id}
-              onChange={handleQuickWinsChange}
-              itemScores={itemScores ?? []}
-              propertyType={assessment.property_type}
-            />
-          )}
-        </div>
+        {/* Quick Wins — not used for school (Yes/No/UTO) assessments */}
+        {!isSchool && (
+          <div className="bg-surface rounded-xl border border-ink/10 shadow-sm p-6">
+            <h2 className="text-sm font-bold text-ink/60 uppercase tracking-wide mb-3">
+              Quick Wins
+            </h2>
+            {id && (
+              <RecommendationEditor
+                items={quickWins}
+                type="quick_win"
+                assessmentId={id}
+                onChange={handleQuickWinsChange}
+                itemScores={itemScores ?? []}
+                propertyType={assessment.property_type}
+              />
+            )}
+          </div>
+        )}
 
         {/* Liability Waiver + Assessor Signature */}
         <div className="bg-surface rounded-xl border-2 border-ink/20 shadow-sm p-6">
@@ -488,10 +514,10 @@ export default function Summary() {
         <div className="flex items-center gap-4 pb-8">
           <button
             type="button"
-            disabled={overall === null || generating}
+            disabled={!canGeneratePDF || generating}
             onClick={handleGeneratePDF}
             className={`flex-1 px-6 py-4 rounded-xl font-semibold text-sm transition-colors ${
-              overall === null
+              !canGeneratePDF
                 ? 'bg-ink/20 text-ink/40 cursor-not-allowed'
                 : generating
                   ? 'bg-blue-medium text-white/80 cursor-wait'
@@ -500,8 +526,10 @@ export default function Summary() {
           >
             {generating
               ? 'Generating PDF...'
-              : overall === null
-                ? 'Score items to generate PDF'
+              : !canGeneratePDF
+                ? isSchool
+                  ? 'Rate items to generate PDF'
+                  : 'Score items to generate PDF'
                 : 'Generate PDF Report'}
           </button>
           {isComplete ? (
