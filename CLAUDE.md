@@ -197,22 +197,28 @@ The full checklist item text lives in `src/data/zones.ts`. Trimmed from 141 to 6
 10. **Version bumps are required** on every commit that changes app functionality. Bump the semver version in both `cpted-assessor/package.json` and the version display in `cpted-assessor/src/pages/Home.tsx`. Use patch for fixes, minor for features, major for breaking changes.
 11. **Townhome item text mirrors residential verbatim** where the CPTED concept is identical — this is what makes `duplicate.ts` carry scores and photos cleanly on type conversion. Only genuinely new items (Shared Boundaries zone, peephole, HOA-specific items) diverge.
 
-## Liability Waiver (Verbatim — Do Not Modify)
+## Liability Waiver / Disclaimer (Verbatim — Do Not Modify)
+
+Legal-advisor-approved replacement adopted 2026-07-07 (v0.29.1). Source of truth:
+`CPTED Approve Disclaimer.docx` (repo root). Two paragraphs — the blank line is a
+required paragraph break. Lives in `pdf.ts` and `Summary.tsx` as `LIABILITY_WAIVER`.
 
 ```
-This CPTED assessment is provided solely for informational and preventative purposes.
-The observations and recommendations included in this report are offered as voluntary
-guidance and do not constitute mandated safety requirements, building code standards,
-or legal directives. The implementation of any recommendations is entirely at the
-discretion of the property owner and should be undertaken only with appropriate
-professional consultation when necessary. The Volusia Sheriff's Office, its employees,
-agents, and representatives make no warranties, guarantees, or assurances regarding
-the effectiveness of any recommended security measures. Crime prevention strategies
-reduce risk but cannot completely eliminate the possibility of criminal activity. By
-accepting this report, the property owner acknowledges that the Volusia Sheriff's
-Office shall not be held liable for any actions taken or not taken based on the
-information provided, nor for any damages, losses, or incidents that may occur on or
-near the property following this assessment.
+This CPTED assessment has been conducted by the Volusia Sheriff's Office according to
+the protocols of the National Institute of Crime Prevention. The information contained
+herein is based on guidelines set by the International Society of Crime Prevention
+Practitioners, the Florida Crime Prevention Training Institute, and the observations of
+the person conducting the survey. The assessment is intended to assist you in improving
+the overall level of security only. It is not intended to imply that existing security
+or CPTED measures are absolute or perfect. Any decisions based upon this assessment are
+solely your responsibility. Accordingly, Volusia Sheriff's Office makes no guarantee and
+accepts no liability for any security breaches or crimes after the completion and
+submission of the assessment.
+
+All new construction or retrofits should comply with existing building codes, zoning
+laws, and fire codes. Prior to installation or modifications the proper licensing and
+variances should be obtained and inspections should be conducted by the appropriate
+agency.
 ```
 
 ## MVP Build Order
