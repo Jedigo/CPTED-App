@@ -89,7 +89,9 @@ router.post('/sync', async (req, res, next) => {
             principle: is.principle as string,
             item_text: is.item_text as string,
             item_order: is.item_order as number,
-            score: is.score as number | null,
+            // School assessments rate items 'yes'/'no'/'uto' (string) instead of 1-5
+            score: typeof is.score === 'number' ? is.score : null,
+            rating: typeof is.score === 'string' ? is.score : null,
             is_na: (is.is_na as boolean) || false,
             notes: (is.notes as string) || '',
             photo_ids: (is.photo_ids as string[]) || [],

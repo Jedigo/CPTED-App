@@ -41,13 +41,21 @@ export interface SyncResult {
   error?: string;
 }
 
+export interface SyncProgress {
+  current: number;
+  total: number;
+}
+
 /**
  * Sync an assessment to the server.
  * 1. POST assessment metadata + scores to /api/sync
  * 2. Upload unsynced photos to /api/assessments/:id/photos
  * 3. Mark synced_at in IndexedDB
  */
-export async function syncAssessment(assessmentId: string): Promise<SyncResult> {
+export async function syncAssessment(
+  assessmentId: string,
+  onProgress?: (progress: SyncProgress) => void,
+): Promise<SyncResult> {
   // Gather all data from IndexedDB
   const [assessment, zoneScores, itemScores, photos] = await Promise.all([
     db.assessments.get(assessmentId),
@@ -82,19 +90,50 @@ export async function syncAssessment(assessmentId: string): Promise<SyncResult> 
 
   const syncData = await syncRes.json();
 
-  // 2. Upload all photos (always re-upload to handle previously failed uploads)
-  let photosUploaded = 0;
-  const uploadablePhotos = photos.filter((p) => p.data || p.blob);
-
-  for (const photo of uploadablePhotos) {
-    try {
-      await uploadPhoto(assessmentId, photo);
-      // Mark photo as synced in IndexedDB
-      await db.photos.update(photo.id, { synced: true });
-      photosUploaded++;
-    } catch (err) {
-      console.warn(`Failed to upload photo ${photo.id}:`, err);
+  // 2. Upload photos the server doesn't have yet. Keyed on the server's photo
+  // list (not the local synced flag) so previously failed uploads still retry.
+  let serverPhotoIds = new Set<string>();
+  try {
+    const existingRes = await fetch(`${API_BASE}/api/assessments/${assessmentId}`);
+    if (existingRes.ok) {
+      const existing = await existingRes.json();
+      serverPhotoIds = new Set(
+        ((existing.photos ?? []) as { id: string }[]).map((p) => p.id),
+      );
     }
+  } catch {
+    // If the check fails, fall back to uploading everything
+  }
+
+  let photosUploaded = 0;
+  const uploadablePhotos = photos.filter(
+    (p) => (p.data || p.blob) && !serverPhotoIds.has(p.id),
+  );
+
+  // Photos already on the server count as synced locally
+  for (const photo of photos) {
+    if (serverPhotoIds.has(photo.id) && !photo.synced) {
+      await db.photos.update(photo.id, { synced: true });
+    }
+  }
+
+  const totalToUpload = uploadablePhotos.length;
+  const BATCH_SIZE = 4;
+  for (let i = 0; i < uploadablePhotos.length; i += BATCH_SIZE) {
+    const batch = uploadablePhotos.slice(i, i + BATCH_SIZE);
+    await Promise.all(
+      batch.map(async (photo) => {
+        try {
+          await uploadPhoto(assessmentId, photo);
+          // Mark photo as synced in IndexedDB
+          await db.photos.update(photo.id, { synced: true });
+          photosUploaded++;
+          onProgress?.({ current: photosUploaded, total: totalToUpload });
+        } catch (err) {
+          console.warn(`Failed to upload photo ${photo.id}:`, err);
+        }
+      }),
+    );
   }
 
   // 3. Update assessment synced_at in IndexedDB

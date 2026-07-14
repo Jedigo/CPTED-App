@@ -146,6 +146,7 @@ export default function Summary() {
 
   const [editInfoOpen, setEditInfoOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncSuccess, setSyncSuccess] = useState<string | null>(null);
   const [serverReachable, setServerReachable] = useState<boolean | null>(null);
@@ -161,7 +162,7 @@ export default function Summary() {
     setSyncError(null);
     setSyncSuccess(null);
     try {
-      const result = await syncAssessment(id);
+      const result = await syncAssessment(id, setSyncProgress);
       setSyncSuccess(
         `Synced successfully${result.photosUploaded > 0 ? ` (${result.photosUploaded} photos uploaded)` : ''}`
       );
@@ -169,6 +170,7 @@ export default function Summary() {
       setSyncError(err instanceof Error ? err.message : 'Sync failed');
     } finally {
       setSyncing(false);
+      setSyncProgress(null);
     }
   }
 
@@ -568,17 +570,21 @@ export default function Summary() {
             </div>
             <button
               type="button"
-              disabled={syncing || overall === null}
+              disabled={syncing}
               onClick={handleSync}
               className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all flex-shrink-0 ${
                 syncing
                   ? 'bg-blue-medium/60 text-white cursor-wait'
-                  : overall === null
-                    ? 'bg-ink/20 text-ink/40 cursor-not-allowed'
-                    : 'bg-blue-medium text-white hover:bg-blue-medium/80 active:scale-95'
+                  : 'bg-blue-medium text-white hover:bg-blue-medium/80 active:scale-95'
               }`}
             >
-              {syncing ? 'Syncing...' : assessment.synced_at ? 'Re-sync' : 'Sync Now'}
+              {syncing
+                ? syncProgress
+                  ? `Uploading ${syncProgress.current} / ${syncProgress.total}...`
+                  : 'Syncing...'
+                : assessment.synced_at
+                  ? 'Re-sync'
+                  : 'Sync Now'}
             </button>
           </div>
         )}

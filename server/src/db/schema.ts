@@ -61,6 +61,7 @@ export const itemScores = pgTable('item_scores', {
   item_text: text('item_text').notNull(),
   item_order: integer('item_order').notNull(),
   score: integer('score'),
+  rating: varchar('rating', { length: 10 }),
   is_na: boolean('is_na').notNull().default(false),
   notes: text('notes').notNull().default(''),
   photo_ids: jsonb('photo_ids').notNull().default([]),

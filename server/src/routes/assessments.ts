@@ -155,10 +155,17 @@ router.get('/:id', async (req, res, next) => {
         .where(eq(photos.assessment_id, req.params.id)),
     ]);
 
+    // School ratings ('yes'/'no'/'uto') are stored in the separate rating
+    // column; merge back into score so the PWA gets the shape it pushed.
+    const mergedItems = items.map(({ rating, ...rest }) => ({
+      ...rest,
+      score: rating ?? rest.score,
+    }));
+
     res.json({
       ...assessment,
       zone_scores: zones,
-      item_scores: items,
+      item_scores: mergedItems,
       photos: photoRows,
     });
   } catch (err) {
@@ -216,7 +223,8 @@ router.put('/:id', async (req, res, next) => {
         await db
           .update(itemScores)
           .set({
-            score: is.score,
+            score: typeof is.score === 'number' ? is.score : null,
+            rating: typeof is.score === 'string' ? is.score : null,
             is_na: is.is_na ?? false,
             notes: is.notes ?? '',
             photo_ids: is.photo_ids ?? [],

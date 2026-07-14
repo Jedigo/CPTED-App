@@ -1,0 +1,1 @@
+ALTER TABLE "item_scores" ADD COLUMN "rating" varchar(10);
