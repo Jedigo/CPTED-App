@@ -14,8 +14,21 @@ import type {
   Photo,
   Recommendation,
   SchoolRating,
+  LightSurvey,
+  LightReading,
 } from '../types';
 import type { ItemGuidance } from '../data/item-guidance';
+import { buildPointPlan, cellToPoint, pointPosition } from './light-grid';
+import {
+  computeStats,
+  darkestPoints,
+  verdictLines,
+  formatFc,
+  formatRatio,
+  bandFor,
+  ILLUMINANCE_BANDS,
+  STANDARD_CITATION,
+} from './light-stats';
 
 // --- Design constants ---
 const NAVY = '#1B3A5C';
@@ -107,19 +120,24 @@ interface PDFData {
   itemScores: ItemScore[];
   photos: Photo[];
   badgeLogo: string | null;
+  lightSurveys: LightSurvey[];
+  lightReadings: LightReading[];
 }
 
 async function gatherAssessmentData(assessmentId: string): Promise<PDFData> {
-  const [assessment, zoneScores, itemScores, photos, badgeLogo] = await Promise.all([
-    db.assessments.get(assessmentId),
-    db.zone_scores
-      .where('assessment_id')
-      .equals(assessmentId)
-      .sortBy('zone_order'),
-    db.item_scores.where('assessment_id').equals(assessmentId).toArray(),
-    db.photos.where('assessment_id').equals(assessmentId).toArray(),
-    loadLogoBase64('/logos/volusia_sheriff_badge_star.png'),
-  ]);
+  const [assessment, zoneScores, itemScores, photos, badgeLogo, lightSurveys, lightReadings] =
+    await Promise.all([
+      db.assessments.get(assessmentId),
+      db.zone_scores
+        .where('assessment_id')
+        .equals(assessmentId)
+        .sortBy('zone_order'),
+      db.item_scores.where('assessment_id').equals(assessmentId).toArray(),
+      db.photos.where('assessment_id').equals(assessmentId).toArray(),
+      loadLogoBase64('/logos/volusia_sheriff_badge_star.png'),
+      db.light_surveys.where('assessment_id').equals(assessmentId).sortBy('created_at'),
+      db.light_readings.where('assessment_id').equals(assessmentId).toArray(),
+    ]);
 
   if (!assessment) throw new Error('Assessment not found');
 
@@ -130,7 +148,17 @@ async function gatherAssessmentData(assessmentId: string): Promise<PDFData> {
   const referencedIds = new Set(itemScores.flatMap((s) => s.photo_ids));
   const validPhotos = photos.filter((p) => referencedIds.has(p.id));
 
-  return { assessment, zones, itemGuidance, zoneScores, itemScores, photos: validPhotos, badgeLogo };
+  return {
+    assessment,
+    zones,
+    itemGuidance,
+    zoneScores,
+    itemScores,
+    photos: validPhotos,
+    badgeLogo,
+    lightSurveys,
+    lightReadings,
+  };
 }
 
 // --- Page helpers ---
@@ -139,8 +167,8 @@ const FOOTER_TEXT = "CPTED Report - Volusia Sheriff's Office";
 // pageNum is the jsPDF page index. Front-matter pages (cover + CPTED intro)
 // carry no footer; displayed numbering starts at 1 on the table of contents,
 // so we show (pageNum - FRONT_MATTER_PAGES).
-function addPageFooter(doc: jsPDF, pageNum: number) {
-  if (pageNum <= FRONT_MATTER_PAGES) return;
+function addPageFooter(doc: jsPDF, pageNum: number, frontMatter = FRONT_MATTER_PAGES) {
+  if (pageNum <= frontMatter) return;
   const pageHeight = doc.internal.pageSize.getHeight();
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
@@ -151,7 +179,7 @@ function addPageFooter(doc: jsPDF, pageNum: number) {
     pageHeight - 8,
   );
   doc.text(
-    `Page ${pageNum - FRONT_MATTER_PAGES}`,
+    `Page ${pageNum - frontMatter}`,
     PAGE_WIDTH - PAGE_MARGIN,
     pageHeight - 8,
     { align: 'right' },
@@ -185,8 +213,19 @@ function ensureSpace(doc: jsPDF, needed: number, currentY: number): number {
 // Formal document-style title page (applies to every report type). Kept minimal:
 // badge + agency at the top, the CPTED title, and the property/owner name above
 // its address. No footer/page number — page numbering starts on the TOC.
-function renderCoverPage(doc: jsPDF, data: PDFData): void {
+interface CoverOptions {
+  /** Two centered title lines. Defaults to the CPTED report title. */
+  titleLines?: [string, string];
+  /** Optional line under the address, e.g. the lot a lighting survey covers. */
+  subtitle?: string;
+}
+
+function renderCoverPage(doc: jsPDF, data: PDFData, opts: CoverOptions = {}): void {
   const { assessment } = data;
+  const titleLines = opts.titleLines ?? [
+    'Crime Prevention Through',
+    'Environmental Design Report',
+  ];
   const cx = PAGE_WIDTH / 2;
   const DIV = 52; // half-width of the centered divider lines
 
@@ -202,7 +241,8 @@ function renderCoverPage(doc: jsPDF, data: PDFData): void {
   const badgeH = badgeW * (316 / 342);
   const hasName = !!assessment.homeowner_name;
   const blockHeight =
-    (data.badgeLogo ? badgeH : 0) + 12 + 10 + 18 + 9 + 16 + 18 + (hasName ? 6 : 0) + 6;
+    (data.badgeLogo ? badgeH : 0) + 12 + 10 + 18 + 9 + 16 + 18 + (hasName ? 6 : 0) + 6 +
+    (opts.subtitle ? 12 : 0);
   let y = 16 + ((pageHeight - 32) - blockHeight) / 2;
 
   // Badge logo, centered (aspect ratio preserved — the star badge is ~342x316)
@@ -234,9 +274,9 @@ function renderCoverPage(doc: jsPDF, data: PDFData): void {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(21);
   doc.setTextColor(NAVY);
-  doc.text('Crime Prevention Through', cx, y, { align: 'center' });
+  doc.text(titleLines[0], cx, y, { align: 'center' });
   y += 9;
-  doc.text('Environmental Design Report', cx, y, { align: 'center' });
+  doc.text(titleLines[1], cx, y, { align: 'center' });
   y += 16;
 
   // Divider
@@ -257,6 +297,14 @@ function renderCoverPage(doc: jsPDF, data: PDFData): void {
   doc.text(assessment.address, cx, y, { align: 'center' });
   y += 6;
   doc.text(`${assessment.city}, ${assessment.state} ${assessment.zip}`, cx, y, { align: 'center' });
+
+  if (opts.subtitle) {
+    y += 12;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(MEDIUM_BLUE);
+    doc.text(opts.subtitle, cx, y, { align: 'center' });
+  }
 
   // Bottom band — navy, matching the top band and the report's section headers
   doc.setFillColor(NAVY);
@@ -1230,6 +1278,398 @@ function renderZoneDetails(doc: jsPDF, data: PDFData, toc: TocEntry[]): void {
   }
 }
 
+// --- Parking-lot light surveys ---
+//
+// One section per lot walked. The figures are the four the NICP booklet asks
+// for — lowest reading, average, uniformity, and the comparison to the parking
+// target — plus the grid map, which is the part a school district can read at a
+// glance where a column of 84 numbers means nothing to them.
+
+/** Draws the reading grid as a heat map. Returns the y below it. */
+function renderLightHeatMap(
+  doc: jsPDF,
+  survey: LightSurvey,
+  valueByPoint: Map<number, number>,
+  skipped: Set<number>,
+  startY: number,
+): number {
+  // Left gutter holds the row ruler.
+  const GUTTER = 11;
+  const availW = CONTENT_WIDTH - GUTTER;
+  const cell = Math.min(availW / survey.cols, 13);
+  const gridW = cell * survey.cols;
+  const gridH = cell * survey.rows;
+
+  let y = ensureSpace(doc, gridH + 34, startY);
+  const x0 = PAGE_MARGIN + GUTTER + (availW - gridW) / 2;
+
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(120);
+  doc.text(
+    `${Math.round(survey.length_ft)} × ${Math.round(survey.width_ft)} ft, reading every ${survey.spacing_length_ft} ft. Distances are measured from the start corner (top left).`,
+    x0 + gridW / 2,
+    y,
+    { align: 'center' },
+  );
+  y += 5;
+
+  // Column ruler — feet across. Thinned on wide grids so labels don't collide.
+  const colStep = survey.cols > 11 ? 2 : 1;
+  doc.setFontSize(5.5);
+  doc.setTextColor(130);
+  for (let col = 0; col < survey.cols; col++) {
+    if (col % colStep !== 0 && col !== survey.cols - 1) continue;
+    const ft = Math.round(Math.min(col * survey.spacing_length_ft, survey.length_ft));
+    doc.text(String(ft), x0 + col * cell + cell / 2, y, { align: 'center' });
+  }
+  y += 2.5;
+
+  const gridTop = y;
+
+  // Row ruler — feet down the left edge.
+  for (let row = 0; row < survey.rows; row++) {
+    const ft = Math.round(Math.min(row * survey.spacing_width_ft, survey.width_ft));
+    doc.setFontSize(5.5);
+    doc.setTextColor(130);
+    doc.text(`${ft} ft`, x0 - 1.5, gridTop + row * cell + cell / 2 + 1, { align: 'right' });
+  }
+
+  const fontSize = cell >= 11 ? 6 : 5;
+  for (let row = 0; row < survey.rows; row++) {
+    for (let col = 0; col < survey.cols; col++) {
+      const point = cellToPoint(col, row, survey.cols);
+      const cx = x0 + col * cell;
+      const cy = y + row * cell;
+      const value = valueByPoint.get(point);
+
+      if (skipped.has(point)) {
+        doc.setFillColor(226, 232, 240); // slate-200 — obstructed
+        doc.rect(cx, cy, cell, cell, 'F');
+      } else if (value === undefined) {
+        // No reading stored for this point. Mark it explicitly so an empty cell
+        // reads as missing data rather than as a printing gap.
+        doc.setFillColor(255, 255, 255);
+        doc.rect(cx, cy, cell, cell, 'F');
+        doc.setFontSize(fontSize);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(150);
+        doc.text('--', cx + cell / 2, cy + cell / 2, { align: 'center' });
+      } else {
+        const band = bandFor(value);
+        doc.setFillColor(band.bg);
+        doc.rect(cx, cy, cell, cell, 'F');
+        doc.setFontSize(fontSize);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(band.fg);
+        doc.text(value.toFixed(1), cx + cell / 2, cy + cell / 2, { align: 'center' });
+      }
+
+      // Point number, bottom-right — small and dim so the reading stays the
+      // thing you see, but present so the darkest-points table can be followed
+      // back onto the map.
+      if (!skipped.has(point)) {
+        doc.setFontSize(Math.max(3.6, fontSize - 1.5));
+        doc.setFont('helvetica', 'normal');
+        if (value === undefined) doc.setTextColor(175);
+        else doc.setTextColor(bandFor(value).fg === '#ffffff' ? 235 : 90);
+        doc.text(String(point), cx + cell - 0.8, cy + cell - 0.9, { align: 'right' });
+      }
+
+      doc.setDrawColor(200);
+      doc.setLineWidth(0.15);
+      doc.rect(cx, cy, cell, cell, 'S');
+    }
+  }
+  y += gridH + 5;
+
+  // Legend
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'normal');
+  let lx = PAGE_MARGIN;
+  doc.setTextColor(90);
+  doc.text('Footcandles:', lx, y + 2.2);
+  lx += doc.getTextWidth('Footcandles:') + 3;
+  for (const band of ILLUMINANCE_BANDS) {
+    doc.setFillColor(band.bg);
+    doc.rect(lx, y - 0.6, 3, 3, 'F');
+    lx += 4;
+    doc.setTextColor(90);
+    doc.text(band.label, lx, y + 2);
+    lx += doc.getTextWidth(band.label) + 4;
+  }
+  doc.setFillColor(226, 232, 240);
+  doc.rect(lx, y - 0.6, 3, 3, 'F');
+  lx += 4;
+  doc.text('obstructed', lx, y + 2);
+  lx += doc.getTextWidth('obstructed') + 4;
+
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(200);
+  doc.setLineWidth(0.15);
+  doc.rect(lx, y - 0.6, 3, 3, 'FD');
+  lx += 4;
+  doc.text('-- no reading', lx, y + 2);
+
+  return y + 8;
+}
+
+function renderLightSurvey(doc: jsPDF, data: PDFData, survey: LightSurvey): void {
+  doc.addPage();
+  let y = 20;
+
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(NAVY);
+  doc.text(`Lighting Measurements — ${survey.area_name}`, PAGE_MARGIN, y);
+  y += 8;
+
+  const readings = data.lightReadings
+    .filter((r) => r.survey_id === survey.id)
+    .sort((a, b) => a.point_index - b.point_index);
+
+  // Survey particulars the booklet asks to be recorded.
+  const plan =
+    survey.cols > 0 && survey.rows > 0
+      ? buildPointPlan(survey.cols, survey.rows, survey.skipped_points)
+      : null;
+
+  const particulars: string[][] = [
+    ['Date walked', survey.surveyed_at ? formatDate(survey.surveyed_at) : '—'],
+    ['Observer(s)', survey.observers || '—'],
+    ['Weather', survey.weather || '—'],
+    ['Lot dimensions', survey.length_ft ? `${survey.length_ft} × ${survey.width_ft} ft` : '—'],
+    [
+      'Measurement grid',
+      plan
+        ? `${survey.cols} × ${survey.rows} at ${survey.spacing_length_ft} ft spacing (${plan.expectedReadings} points)`
+        : '—',
+    ],
+    ['Lamp type', survey.lamp_type || '—'],
+    ['Fixture type', survey.fixture_type || '—'],
+    ['Illuminance meter', survey.meter_type || '—'],
+    [
+      'Meter calibrated',
+      survey.meter_calibrated_on ? formatDate(survey.meter_calibrated_on) : '—',
+    ],
+  ];
+
+  autoTable(doc, {
+    startY: y,
+    body: particulars,
+    margin: { left: PAGE_MARGIN, right: PAGE_MARGIN },
+    theme: 'plain',
+    bodyStyles: { fontSize: 8.5, textColor: [50, 50, 50], cellPadding: 1.2 },
+    columnStyles: {
+      0: { cellWidth: 40, fontStyle: 'bold', textColor: NAVY },
+      1: { cellWidth: 'auto' },
+    },
+  });
+  // @ts-expect-error — autoTable attaches lastAutoTable to the doc at runtime
+  y = (doc.lastAutoTable?.finalY ?? y) + 8;
+
+  const stats = computeStats(readings.map((r) => r.value_fc));
+
+  if (!stats || !plan) {
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(120);
+    doc.text(
+      'No readings have been imported for this lot yet.',
+      PAGE_MARGIN,
+      y,
+    );
+    return;
+  }
+
+  // --- Scorecard ---
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(NAVY);
+  doc.text('Measured Results', PAGE_MARGIN, y);
+  y += 3;
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Measurement', 'Result', 'Target', 'Finding']],
+    body: [
+      ...verdictLines(stats).map((line) => [
+        line.label,
+        line.value,
+        line.target,
+        line.verdict === 'pass' ? 'Meets' : 'Below',
+      ]),
+      ['Lowest reading', formatFc(stats.min_fc), '—', ''],
+      ['Highest reading', formatFc(stats.max_fc), '—', ''],
+      ['Max-to-min ratio', formatRatio(stats.max_min_ratio), '—', ''],
+    ],
+    margin: { left: PAGE_MARGIN, right: PAGE_MARGIN },
+    theme: 'grid',
+    headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 9 },
+    bodyStyles: { fontSize: 8.5, textColor: [50, 50, 50] },
+    columnStyles: {
+      0: { cellWidth: 45 },
+      1: { cellWidth: 35 },
+      2: { cellWidth: 'auto' },
+      3: { cellWidth: 20, halign: 'center', fontStyle: 'bold' },
+    },
+    didParseCell: (hook) => {
+      if (hook.section !== 'body' || hook.column.index !== 3) return;
+      const text = String(hook.cell.raw ?? '');
+      if (text === 'Meets') hook.cell.styles.textColor = '#16A34A';
+      if (text === 'Below') hook.cell.styles.textColor = '#DC2626';
+    },
+  });
+  // @ts-expect-error — autoTable attaches lastAutoTable to the doc at runtime
+  y = (doc.lastAutoTable?.finalY ?? y) + 5;
+
+  // Direction reminder — a ratio is easy to read backwards.
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'italic');
+  doc.setTextColor(110);
+  const notes = doc.splitTextToSize(
+    `${verdictLines(stats)[1].detail} Uniformity is the average divided by the lowest reading, so a lower ratio is better. Standard applied: ${STANDARD_CITATION}`,
+    CONTENT_WIDTH,
+  );
+  y = ensureSpace(doc, notes.length * 3.4 + 6, y);
+  doc.text(notes, PAGE_MARGIN, y);
+  y += notes.length * 3.4 + 6;
+
+  if (readings.length < plan.expectedReadings) {
+    const missing = plan.expectedReadings - readings.length;
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor('#B45309');
+    const coverage = doc.splitTextToSize(
+      `Coverage: ${readings.length} of ${plan.expectedReadings} grid points carry a reading. ${missing} point${missing === 1 ? '' : 's'} had no reading stored and ${missing === 1 ? 'is' : 'are'} shown blank on the map below; the figures above are calculated from the points that were read.`,
+      CONTENT_WIDTH,
+    );
+    y = ensureSpace(doc, coverage.length * 3.6 + 5, y);
+    doc.text(coverage, PAGE_MARGIN, y);
+    y += coverage.length * 3.6 + 5;
+  }
+
+  // --- Heat map ---
+  const valueByPoint = new Map(readings.map((r) => [r.point_index, r.value_fc]));
+  y = ensureSpace(doc, 30, y);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(NAVY);
+  doc.text('Lot Map', PAGE_MARGIN, y);
+  y += 6;
+  y = renderLightHeatMap(doc, survey, valueByPoint, new Set(survey.skipped_points), y);
+
+  // --- Aerial screenshot ---
+  // The drawn heat map above is exact but abstract; this is the same grid over
+  // the real lot, which is what makes a dark corner recognisable to someone who
+  // has to go stand in it. Optional — plenty of surveys won't have one.
+  if (survey.aerial_image) {
+    const props = doc.getImageProperties(survey.aerial_image);
+    const ratio = props.height / props.width;
+    // Cap the height so a tall screenshot can't push everything else off the
+    // page; a portrait shot simply renders narrower than full width.
+    const maxHeight = 120;
+    let imgW = CONTENT_WIDTH;
+    let imgH = imgW * ratio;
+    if (imgH > maxHeight) {
+      imgH = maxHeight;
+      imgW = imgH / ratio;
+    }
+
+    y = ensureSpace(doc, imgH + 18, y);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(NAVY);
+    doc.text('Aerial View', PAGE_MARGIN, y);
+    y += 5;
+
+    doc.addImage(survey.aerial_image, 'JPEG', PAGE_MARGIN, y, imgW, imgH);
+    doc.setDrawColor(200);
+    doc.rect(PAGE_MARGIN, y, imgW, imgH);
+    y += imgH + 4;
+
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(120);
+    const caption = doc.splitTextToSize(
+      `Measured grid over aerial imagery of ${survey.area_name}. Imagery via Google Earth.`,
+      CONTENT_WIDTH,
+    );
+    doc.text(caption, PAGE_MARGIN, y);
+    y += caption.length * 3.4 + 6;
+  }
+
+  // --- Darkest points ---
+  const darkest = darkestPoints(
+    readings.map((r) => ({ point_index: r.point_index, value_fc: r.value_fc })),
+    5,
+  );
+  y = ensureSpace(doc, 40, y);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(NAVY);
+  doc.text('Darkest Measured Points', PAGE_MARGIN, y);
+  y += 3;
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Point', 'Reading', 'Position from the start corner']],
+    body: darkest.map((p) => {
+      const pos = pointPosition(p.point_index, survey);
+      return [
+        String(p.point_index),
+        formatFc(p.value_fc),
+        `${Math.round(pos.x_ft)} ft across, ${Math.round(pos.y_ft)} ft down`,
+      ];
+    }),
+    margin: { left: PAGE_MARGIN, right: PAGE_MARGIN },
+    theme: 'grid',
+    headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 9 },
+    bodyStyles: { fontSize: 8.5, textColor: [50, 50, 50] },
+    columnStyles: {
+      0: { cellWidth: 18, halign: 'center' },
+      1: { cellWidth: 25, halign: 'center' },
+      2: { cellWidth: 'auto' },
+    },
+  });
+  // @ts-expect-error — autoTable attaches lastAutoTable to the doc at runtime
+  y = (doc.lastAutoTable?.finalY ?? y) + 8;
+
+
+  if (survey.notes.trim()) {
+    y = ensureSpace(doc, 20, y);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(NAVY);
+    doc.text('Notes', PAGE_MARGIN, y);
+    y += 5;
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(60);
+    const noteLines = doc.splitTextToSize(survey.notes.trim(), CONTENT_WIDTH);
+    doc.text(noteLines, PAGE_MARGIN, y);
+  }
+}
+
+function renderLightSurveys(doc: jsPDF, data: PDFData, toc: TocEntry[]): void {
+  if (data.lightSurveys.length === 0) return;
+
+  toc.push({
+    label: 'Lighting Measurements',
+    page: doc.getNumberOfPages() + 1,
+    level: 0,
+  });
+
+  for (const survey of data.lightSurveys) {
+    toc.push({
+      label: survey.area_name,
+      page: doc.getNumberOfPages() + 1,
+      level: 1,
+    });
+    renderLightSurvey(doc, data, survey);
+  }
+}
+
 function renderRecommendations(doc: jsPDF, data: PDFData): void {
   const school = isSchoolType(data.assessment.property_type);
   doc.addPage();
@@ -1570,6 +2010,10 @@ export async function generatePDF(assessmentId: string): Promise<void> {
 
   renderZoneDetails(doc, data, toc); // pushes one entry per zone
 
+  // Parking-lot light surveys, one section per lot. Skipped entirely when none
+  // were walked, so reports without a lighting visit are unchanged.
+  renderLightSurveys(doc, data, toc);
+
   toc.push({ label: 'Recommendations', page: doc.getNumberOfPages() + 1, level: 0 });
   renderRecommendations(doc, data);
 
@@ -1598,4 +2042,69 @@ export async function generatePDF(assessmentId: string): Promise<void> {
 
   // Trigger download
   doc.save(generateFilename(data.assessment));
+}
+
+// --- Standalone light survey report ---
+//
+// A lighting walk is often its own visit, sometimes months before or after the
+// checklist is finished, and the district may want the lighting findings on
+// their own. This produces a short self-contained document — cover, the lot's
+// measurements, and the disclaimer — without requiring the assessment to be
+// complete or touching its status.
+
+function generateLightFilename(assessment: Assessment, survey: LightSurvey): string {
+  const clean = (s: string) =>
+    s.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+  const area = clean(survey.area_name).substring(0, 30) || 'Lot';
+  const addr = clean(assessment.address).substring(0, 40);
+  const date =
+    survey.surveyed_at || assessment.date_of_assessment || survey.created_at.slice(0, 10);
+  return `Lighting_Survey_${area}_${addr}_${date}.pdf`;
+}
+
+export async function generateLightSurveyPDF(surveyId: string): Promise<void> {
+  const survey = await db.light_surveys.get(surveyId);
+  if (!survey) throw new Error('Light survey not found');
+
+  const [assessment, readings, badgeLogo] = await Promise.all([
+    db.assessments.get(survey.assessment_id),
+    db.light_readings.where('survey_id').equals(surveyId).toArray(),
+    loadLogoBase64('/logos/volusia_sheriff_badge_star.png'),
+  ]);
+
+  if (!assessment) throw new Error('Assessment not found');
+
+  // The section renderers take PDFData; the checklist halves stay empty because
+  // nothing in this document reads them.
+  const data: PDFData = {
+    assessment,
+    zones: [],
+    itemGuidance: new Map(),
+    zoneScores: [],
+    itemScores: [],
+    photos: [],
+    badgeLogo,
+    lightSurveys: [survey],
+    lightReadings: readings,
+  };
+
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+  renderCoverPage(doc, data, {
+    titleLines: ['Parking Lot', 'Lighting Survey'],
+    subtitle: survey.area_name,
+  });
+  renderLightSurvey(doc, data, survey);
+  renderLiabilityWaiver(doc, data);
+
+  // Only the cover is front matter here (no CPTED intro, no TOC), so numbering
+  // starts at 1 on the measurements page.
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    addPageFooter(doc, i, 1);
+    addConfidentialHeader(doc, i);
+  }
+
+  doc.save(generateLightFilename(assessment, survey));
 }

@@ -98,6 +98,115 @@ export interface Recommendation {
   type: RecommendationType
 }
 
+// ---------------------------------------------------------------------------
+// Parking-lot light surveys
+//
+// A light survey is an independent record hung off an assessment: a night visit
+// that can be attached to an already-created (even completed) assessment
+// without touching checklist progress or the report gate. Schools only for now.
+//
+// Method follows the NICP instructional guidance: lay a grid over the lot, take
+// one horizontal reading per grid point (minimum 50), then report the lowest
+// reading, the average, and the uniformity ratio.
+// ---------------------------------------------------------------------------
+
+export type IlluminanceUnit = 'fc' | 'lux'
+
+export interface LightSurvey {
+  id: string
+  assessment_id: string
+  created_at: string
+  updated_at: string
+  /** Which lot this covers, e.g. "Main Lot" or "Bus Loop". */
+  area_name: string
+
+  // Grid geometry. length runs along the lot's long axis (the form's D-1),
+  // width along the short axis (D-2). Spacing is derived, not entered.
+  length_ft: number
+  width_ft: number
+  /** Reading positions along the length — intervals + 1, edges included. */
+  cols: number
+  /** Reading positions along the width. */
+  rows: number
+  spacing_length_ft: number
+  spacing_width_ft: number
+  /**
+   * 1-based point indices (serpentine order) that can't be stood on —
+   * landscape islands, curbs, structures. Skipped points are never logged, so
+   * this list is what keeps the meter's sequential Place column aligned to the
+   * grid. Mark them from satellite imagery before the walk.
+   */
+  skipped_points: number[]
+
+  /**
+   * Optional georeference: the start corner (grid point 1) and the far end of
+   * the length axis. Two points give an origin, a bearing, and a length, which
+   * is enough to place every reading on satellite imagery. Null until set.
+   */
+  origin_lat: number | null
+  origin_lng: number | null
+  axis_lat: number | null
+  axis_lng: number | null
+  /**
+   * Third corner, across the short side from the origin. Optional, but with it
+   * the three corners fully determine the rectangle — length, width, bearing,
+   * and which side the lot lies on — so no dimension has to be typed.
+   */
+  width_lat: number | null
+  width_lng: number | null
+  /**
+   * Which side of the origin-to-axis line the lot occupies. Derived from the
+   * third corner when there is one; otherwise a manual toggle, since two points
+   * alone leave it ambiguous.
+   */
+  grid_flipped: boolean
+
+  // Survey metadata the NICP booklet asks to be recorded.
+  surveyed_at: string | null
+  observers: string
+  weather: string
+  lamp_type: string
+  fixture_type: string
+  pole_height_ft: number | null
+  meter_type: string
+  meter_calibrated_on: string
+  notes: string
+
+  /**
+   * A screenshot of the exported grid on satellite imagery, as a base64 JPEG
+   * data URL (same storage rule as photos — Safari detaches Blobs kept in
+   * IndexedDB). Optional; the report renders the drawn heat map either way.
+   *
+   * The app can't fetch satellite tiles itself without an API key and a billing
+   * account, so the picture comes back the way it went out: the assessor opens
+   * the KML in Google Earth and screenshots it.
+   */
+  aerial_image: string | null
+
+  // Import provenance
+  unit: IlluminanceUnit
+  imported_filename: string | null
+  imported_at: string | null
+}
+
+export interface LightReading {
+  id: string
+  survey_id: string
+  assessment_id: string
+  /** 1-based position in the serpentine walk order. Grid cell is derived. */
+  point_index: number
+  /** Always footcandles — the comparison unit. Converted on import. */
+  value_fc: number
+  /** Value exactly as the meter wrote it, in raw_unit. */
+  raw_value: number
+  raw_unit: string
+  /** Meter clock reading. Unreliable if the clock was never set. */
+  measured_at: string | null
+  /** The meter's Place column, kept for tracing a value back to the file. */
+  meter_place: number | null
+  source: 'imported' | 'manual'
+}
+
 // Zone definition types (for the static checklist data)
 export interface ZonePrinciple {
   key: string
