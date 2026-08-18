@@ -84,6 +84,7 @@ export interface Photo {
   mime_type: string
   gps_lat: number | null
   gps_lng: number | null
+  gps_accuracy_m: number | null   // device-reported radius in metres; see GPS_ACCURACY_LIMIT_M
   compass_heading: number | null
   annotation_data: Record<string, unknown> | null
   synced: boolean

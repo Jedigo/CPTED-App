@@ -58,6 +58,9 @@ router.post(
         mime_type: req.file.mimetype,
         gps_lat: req.body.gps_lat ? parseFloat(req.body.gps_lat) : null,
         gps_lng: req.body.gps_lng ? parseFloat(req.body.gps_lng) : null,
+        gps_accuracy_m: req.body.gps_accuracy_m
+          ? parseFloat(req.body.gps_accuracy_m)
+          : null,
         compass_heading: req.body.compass_heading
           ? parseFloat(req.body.compass_heading)
           : null,

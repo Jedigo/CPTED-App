@@ -55,18 +55,61 @@ export function compressImage(
 }
 
 /**
- * Best-effort GPS coordinates from the device. Returns null if unavailable or denied.
+ * Worst fix, in metres, we are willing to record on a photo.
+ *
+ * The field iPads are Wi-Fi-only: they have no GNSS receiver, so a "location"
+ * is a lookup of the surrounding Wi-Fi networks. Tethered to a phone hotspot in
+ * a parking lot — a network with no fixed position in Apple's database — the
+ * device falls back to a coarse network/IP-level guess and reports it with the
+ * same confident shape as a real fix. A photo in a Sheriff's Office report
+ * geotagged to the wrong parcel is worse than one with no geotag at all, so a
+ * fix this loose is discarded rather than stored.
+ *
+ * 30 m is roughly a residential lot width: closer than this identifies the
+ * property, looser than this could name the neighbour's.
  */
-export function getGPSCoordinates(): Promise<{ lat: number; lng: number } | null> {
+export const GPS_ACCURACY_LIMIT_M = 30;
+
+export interface GPSFix {
+  lat: number;
+  lng: number;
+  /** Radius of 95% confidence in metres, as reported by the device. */
+  accuracy: number;
+}
+
+/**
+ * Best-effort GPS coordinates from the device. Returns null if unavailable,
+ * denied, or too imprecise to attribute to a property (see
+ * GPS_ACCURACY_LIMIT_M).
+ *
+ * Note this only works on a secure origin — over plain http the browser
+ * rejects the request outright, which is what silently disabled photo
+ * geotagging before the app moved to https.
+ */
+export function getGPSCoordinates(): Promise<GPSFix | null> {
   if (!navigator.geolocation) return Promise.resolve(null);
 
   return new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        resolve({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        });
+        const { latitude, longitude, accuracy } = position.coords;
+
+        // A device that cannot state its accuracy cannot be trusted to be
+        // accurate. Treat a missing figure as a failed fix.
+        if (typeof accuracy !== 'number' || !Number.isFinite(accuracy)) {
+          resolve(null);
+          return;
+        }
+        if (accuracy > GPS_ACCURACY_LIMIT_M) {
+          console.warn(
+            `Discarding photo GPS: accuracy ${Math.round(accuracy)}m exceeds ` +
+              `the ${GPS_ACCURACY_LIMIT_M}m limit.`,
+          );
+          resolve(null);
+          return;
+        }
+
+        resolve({ lat: latitude, lng: longitude, accuracy });
       },
       () => resolve(null),
       { enableHighAccuracy: true, timeout: 5000, maximumAge: 30000 },
@@ -102,6 +145,7 @@ export async function savePhoto(
     mime_type: 'image/jpeg',
     gps_lat: gps?.lat ?? null,
     gps_lng: gps?.lng ?? null,
+    gps_accuracy_m: gps?.accuracy ?? null,
     compass_heading: null,
     annotation_data: null,
     synced: false,

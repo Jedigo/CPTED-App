@@ -190,6 +190,8 @@ async function uploadPhoto(assessmentId: string, photo: Photo): Promise<void> {
   if (photo.captured_at) formData.append('captured_at', photo.captured_at);
   if (photo.gps_lat !== null) formData.append('gps_lat', String(photo.gps_lat));
   if (photo.gps_lng !== null) formData.append('gps_lng', String(photo.gps_lng));
+  if (photo.gps_accuracy_m != null)
+    formData.append('gps_accuracy_m', String(photo.gps_accuracy_m));
   if (photo.compass_heading !== null)
     formData.append('compass_heading', String(photo.compass_heading));
   if (photo.annotation_data)
@@ -383,6 +385,7 @@ export async function pullAssessment(
           mime_type: meta.mime_type || 'image/jpeg',
           gps_lat: meta.gps_lat ?? null,
           gps_lng: meta.gps_lng ?? null,
+          gps_accuracy_m: meta.gps_accuracy_m ?? null,
           compass_heading: meta.compass_heading ?? null,
           annotation_data: meta.annotation_data ?? null,
           synced: true,

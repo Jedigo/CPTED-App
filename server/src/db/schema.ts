@@ -79,8 +79,14 @@ export const photos = pgTable('photos', {
   blob_path: varchar('blob_path', { length: 500 }).notNull(),
   filename: varchar('filename', { length: 255 }).notNull(),
   mime_type: varchar('mime_type', { length: 50 }).notNull().default('image/jpeg'),
-  gps_lat: real('gps_lat'),
-  gps_lng: real('gps_lng'),
+  // double precision, not real: float4 holds ~7 significant digits and a
+  // latitude needs 9, so a real column rounds a coordinate by up to a metre.
+  gps_lat: doublePrecision('gps_lat'),
+  gps_lng: doublePrecision('gps_lng'),
+  // Device-reported radius of the fix in metres. The PWA discards anything
+  // looser than its limit, so a stored coordinate always carries the figure
+  // that justified keeping it.
+  gps_accuracy_m: real('gps_accuracy_m'),
   compass_heading: real('compass_heading'),
   annotation_data: jsonb('annotation_data'),
   synced: boolean('synced').notNull().default(false),

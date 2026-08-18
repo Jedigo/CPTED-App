@@ -123,6 +123,7 @@ router.post('/sync', async (req, res, next) => {
                 zone_key: photo.zone_key as string,
                 gps_lat: photo.gps_lat as number | null,
                 gps_lng: photo.gps_lng as number | null,
+                gps_accuracy_m: photo.gps_accuracy_m as number | null,
                 compass_heading: photo.compass_heading as number | null,
                 annotation_data: photo.annotation_data as Record<string, unknown> | null,
               })

@@ -155,6 +155,7 @@ router.get('/:id', async (req, res, next) => {
           mime_type: photos.mime_type,
           gps_lat: photos.gps_lat,
           gps_lng: photos.gps_lng,
+          gps_accuracy_m: photos.gps_accuracy_m,
           compass_heading: photos.compass_heading,
           annotation_data: photos.annotation_data,
           synced: photos.synced,
