@@ -114,22 +114,22 @@ export default function AerialCornerPicker({
   /**
    * Fetch imagery for a view.
    *
-   * `background` means the screen already shows the right ground and this is
-   * only replacing it with something wider or sharper: no spinner, and the
-   * live gesture transform is deliberately left alone, because the swap shows
-   * the same ground and so the transform stays valid. A foreground load is the
-   * opposite — there is nothing correct to look at, so it takes the spinner and
-   * clears the transform in the same commit that draws the new image. Splitting
-   * those two was the whole point: only the second kind can make a gesture wait.
+   * Foreground means there is nothing correct on screen for where the assessor
+   * is going: it takes the spinner, and it fetches without the margin because
+   * that is the fast one (about 0.75 s against 2.5 s) — the margin is no use if
+   * it is not there yet. It commits the centre and span it fetched, so the
+   * caller can leave the gesture transform holding the dragged position until
+   * this lands and everything moves together in one commit.
    *
-   * `plain` skips the margin, for the very first paint. A 2400x1800 request
-   * costs about 2 s against 0.75 s for 1200x900, which is worth paying to make
-   * later gestures free but not worth staring at before anything is on screen.
+   * Background means the screen already shows the right ground and this is only
+   * widening or sharpening it. No spinner, and the live gesture transform is
+   * deliberately left alone, because the swap shows the same ground and so the
+   * transform stays valid. Only this kind fetches the margin.
    */
   const load = useCallback(
-    async (c: LatLng, span: number, opts: { background?: boolean; plain?: boolean } = {}) => {
+    async (c: LatLng, span: number, opts: { background?: boolean } = {}) => {
       const background = opts.background ?? false;
-      const scale = opts.plain ? 1 : OVERSCAN;
+      const scale = background ? OVERSCAN : 1;
       const mine = ++requestSeq.current;
       if (!background) setBusy(true);
       setError(null);
@@ -139,7 +139,12 @@ export default function AerialCornerPicker({
         if (background) {
           setView(v);
         } else {
+          // Image, position and transform in one commit: anything left over
+          // from the gesture is dropped in the same render that draws where it
+          // was dragged to, so there is nothing to spring back from.
           setView(v);
+          setCenter(c);
+          setSpanFt(span);
           setPan(null);
           setZoomPreview(null);
         }
@@ -163,7 +168,7 @@ export default function AerialCornerPicker({
     if (center) return;
     if (corners.origin) {
       setCenter(corners.origin);
-      load(corners.origin, spanFt, { plain: true });
+      load(corners.origin, spanFt);
       return;
     }
     let cancelled = false;
@@ -178,7 +183,7 @@ export default function AerialCornerPicker({
           return;
         }
         setCenter(found[0].location);
-        await load(found[0].location, spanFt, { plain: true });
+        await load(found[0].location, spanFt);
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof ImageryError ? err.message : 'Address lookup failed.');
@@ -283,21 +288,35 @@ export default function AerialCornerPicker({
     const nextSpan =
       SPAN_STEPS_FT[Math.min(SPAN_STEPS_FT.length - 1, Math.max(0, nearest + delta))];
     if (nextSpan === spanFt) return;
-    // No fetch here. The window resizes over pixels already held and the effect
-    // decides afterwards whether a sharper one is worth requesting.
-    setSpanFt(nextSpan);
+    if (view && covers(view, center, nextSpan)) {
+      // The window resizes over pixels already held; the effect decides
+      // afterwards whether a sharper one is worth requesting.
+      setSpanFt(nextSpan);
+      return;
+    }
+    load(center, nextSpan);
   }
 
   function place(clientX: number, clientY: number) {
     const el = imgRef.current;
     if (!el || !view || !viewport) return;
     const rect = el.getBoundingClientRect();
+    let cx = clientX - rect.left;
+    let cy = clientY - rect.top;
+    // A gesture can still be held on screen while its replacement is fetched,
+    // so the picture sits offset or scaled from where the coordinate maths puts
+    // it. Undo that before reading the tap: otherwise a corner placed during
+    // the wait lands somewhere else entirely, and nothing about it looks wrong.
+    if (zoomPreview) {
+      cx = zoomPreview.originX + (cx - zoomPreview.originX) / zoomPreview.scale;
+      cy = zoomPreview.originY + (cy - zoomPreview.originY) / zoomPreview.scale;
+    } else if (pan) {
+      cx -= pan.x;
+      cy -= pan.y;
+    }
     // The container shows a window of the image, scaled: convert back through
     // the window before the image's own pixel grid.
-    const { x: px, y: py } = toImagePx(
-      (clientX - rect.left) / rect.width,
-      (clientY - rect.top) / rect.height,
-    );
+    const { x: px, y: py } = toImagePx(cx / rect.width, cy / rect.height);
     const p = pixelToLatLng(view, px, py);
 
     const updated = { ...corners, [next]: p };
@@ -390,11 +409,17 @@ export default function AerialCornerPicker({
         // the new view on it instead would slide the lot sideways at the moment
         // the sharp image appears.
         const nextCentre = centreForFocus(focus, rx, ry, nextSpan, VIEW_W, VIEW_H);
-        // The window resizes on pixels already held, so these land together and
-        // the preview scale is dropped in the same commit — no fetch between.
-        setSpanFt(nextSpan);
-        setCenter(nextCentre);
-        setZoomPreview(null);
+        if (covers(view, nextCentre, nextSpan)) {
+          // The window resizes on pixels already held, so these land together
+          // and the preview scale is dropped in the same commit — no fetch.
+          setSpanFt(nextSpan);
+          setCenter(nextCentre);
+          setZoomPreview(null);
+        } else {
+          // Zoomed out past what was fetched: hold the pinch scale until the
+          // replacement lands rather than rebounding to the old size first.
+          load(nextCentre, nextSpan);
+        }
       } else {
         setZoomPreview(null);
       }
@@ -423,8 +448,18 @@ export default function AerialCornerPicker({
       viewport.x + viewport.w / 2 - dxPx,
       viewport.y + viewport.h / 2 - dyPx,
     );
-    setCenter(newCentre);
-    setPan(null);
+
+    if (covers(view, newCentre, spanFt)) {
+      setCenter(newCentre);
+      setPan(null);
+      return;
+    }
+    // Dragged past what was fetched. The window can only slide as far as the
+    // image goes, so dropping the transform now would spring the view back from
+    // where the finger left it — and once it is against the edge, back to
+    // exactly where the drag started. Hold the dragged position and let the
+    // replacement commit the move.
+    load(newCentre, spanFt);
   }
 
   const rect =
