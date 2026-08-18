@@ -43,8 +43,14 @@ const ROUND_SPACINGS_FT = [10, 15, 20, 25, 30, 35, 40, 45, 50];
  * is big enough to be worth measuring. Edges are where light falls off, so a
  * remainder is covered rather than dropped — the last cell is simply shorter
  * than the rest.
+ *
+ * Half a step is the cut-off. An edge point costs a whole extra row or column
+ * of walking, and one placed a short hop from its neighbour reads almost the
+ * same patch of ground twice while the rest of the lot is sampled evenly. Below
+ * half a step that trade stops being worth it: the unread strip is narrower
+ * than the gap the reading would sit in.
  */
-const EDGE_POINT_THRESHOLD = 0.4;
+const EDGE_POINT_THRESHOLD = 0.5;
 
 export function pointsAlong(runFt: number, spacingFt: number): number {
   if (!(runFt > 0) || !(spacingFt > 0)) return 0;
@@ -125,11 +131,32 @@ export function generateGridOptions(lengthFt: number, widthFt: number): GridOpti
     });
   }
 
-  // Usable = fits one session and clears the minimum. Rank those first, then by
-  // closeness to the target count.
+  // Usable = fits one session and clears the minimum. Rank those first, then
+  // prefer a grid whose cells are all the same size, then by closeness to the
+  // target count.
+  //
+  // A squeezed axis is not just untidy. It adds a whole row or column of
+  // readings — 21 of them on a 448 x 165 ft lot — sitting closer together than
+  // every other reading, so they cost a quarter more walking and tell you about
+  // ground the neighbouring points already covered. Where a spacing exists that
+  // divides the lot cleanly and still clears the minimum, that is the better
+  // walk even when it lands further from the target count.
+  //
+  // Set above anything the count term can reach for a usable option — that term
+  // is bounded by the gap between the minimum and the target — so an evenly
+  // divided grid wins outright rather than only when the counts happen to be
+  // close. Fewer readings on a uniform grid is the better walk; a grid still
+  // has to clear the minimum to be usable at all, so this cannot trade away
+  // coverage the standard requires.
+  const SQUEEZE_PENALTY = 100;
   const score = (o: GridOption) => {
     const usable = o.within_capacity && o.meets_minimum;
-    return (usable ? 0 : 1_000_000) + Math.abs(o.points - TARGET_READINGS);
+    const squeezed = (o.short_last_col ? 1 : 0) + (o.short_last_row ? 1 : 0);
+    return (
+      (usable ? 0 : 1_000_000) +
+      squeezed * SQUEEZE_PENALTY +
+      Math.abs(o.points - TARGET_READINGS)
+    );
   };
   options.sort((a, b) => score(a) - score(b));
 
