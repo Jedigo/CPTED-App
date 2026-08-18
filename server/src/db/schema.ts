@@ -131,6 +131,10 @@ export const lightSurveys = pgTable('light_surveys', {
   width_lat: doublePrecision('width_lat'),
   width_lng: doublePrecision('width_lng'),
   grid_flipped: boolean('grid_flipped').notNull().default(false),
+  // Where readings sit in their cells: 'center' (equal square cells, current
+  // method) or 'edge' (original corner-first layout). Null for surveys that
+  // predate the field, which were all walked corner-first.
+  grid_origin: text('grid_origin'),
 
   surveyed_at: varchar('surveyed_at', { length: 40 }),
   observers: text('observers').notNull().default(''),

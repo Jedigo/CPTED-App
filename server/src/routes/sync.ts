@@ -170,6 +170,7 @@ router.post('/sync', async (req, res, next) => {
               width_lat: (ls.width_lat as number) ?? null,
               width_lng: (ls.width_lng as number) ?? null,
               grid_flipped: (ls.grid_flipped as boolean) || false,
+              grid_origin: (ls.grid_origin as string | null) ?? null,
               surveyed_at: (ls.surveyed_at as string) ?? null,
               observers: (ls.observers as string) || '',
               weather: (ls.weather as string) || '',

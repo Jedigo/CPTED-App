@@ -18,7 +18,7 @@
  */
 
 import type { LightSurvey } from '../types';
-import { pointPosition, buildPointPlan, pointToCell } from './light-grid';
+import { pointPosition, buildPointPlan, pointToCell, type GridOrigin } from './light-grid';
 import {
   bandFor,
   formatFc,
@@ -321,12 +321,25 @@ export interface KmlReading {
 }
 
 /**
- * Cell edges along one axis, in feet: the midpoints between reading positions,
- * so every cell is the ground each reading actually speaks for. The first and
- * last cells stop at the lot edge rather than running half a spacing past it,
- * and a short final row/column produces a correspondingly narrow cell.
+ * Cell edges along one axis, in feet: the ground each reading speaks for.
+ *
+ * Centred readings tile the lot in identical squares, so the cell is simply the
+ * step either side of the reading. Any leftover past the last whole cell is not
+ * drawn, because no reading covers it.
+ *
+ * The legacy corner-first layout takes the midpoints between readings instead,
+ * which is the honest area for a reading standing on the lot boundary — and the
+ * reason those surveys show half-width cells down two sides.
  */
-function cellEdges(positions: number[], runFt: number): Array<[number, number]> {
+function cellEdges(
+  positions: number[],
+  runFt: number,
+  spacingFt: number,
+  origin: GridOrigin,
+): Array<[number, number]> {
+  if (origin !== 'edge') {
+    return positions.map((pos) => [pos - spacingFt / 2, pos + spacingFt / 2] as [number, number]);
+  }
   return positions.map((pos, i) => {
     const lo = i === 0 ? 0 : (positions[i - 1] + pos) / 2;
     const hi = i === positions.length - 1 ? runFt : (pos + positions[i + 1]) / 2;
@@ -335,7 +348,15 @@ function cellEdges(positions: number[], runFt: number): Array<[number, number]> 
 }
 
 /** Reading positions along one axis, matching how pointPosition lays them out. */
-function axisPositions(count: number, spacingFt: number, runFt: number): number[] {
+function axisPositions(
+  count: number,
+  spacingFt: number,
+  runFt: number,
+  origin: GridOrigin,
+): number[] {
+  if (origin !== 'edge') {
+    return Array.from({ length: count }, (_, i) => (i + 0.5) * spacingFt);
+  }
   return Array.from({ length: count }, (_, i) => Math.min(i * spacingFt, runFt));
 }
 
@@ -389,13 +410,18 @@ export function buildGridKml(
     );
   };
 
+  const layout: GridOrigin = survey.grid_origin ?? 'edge';
   const xEdges = cellEdges(
-    axisPositions(survey.cols, survey.spacing_length_ft, survey.length_ft),
+    axisPositions(survey.cols, survey.spacing_length_ft, survey.length_ft, layout),
     survey.length_ft,
+    survey.spacing_length_ft,
+    layout,
   );
   const yEdges = cellEdges(
-    axisPositions(survey.rows, survey.spacing_width_ft, survey.width_ft),
+    axisPositions(survey.rows, survey.spacing_width_ft, survey.width_ft, layout),
     survey.width_ft,
+    survey.spacing_width_ft,
+    layout,
   );
 
   // With readings, label only the worst handful, so the numbers that do show are

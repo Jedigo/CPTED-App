@@ -1,9 +1,16 @@
 /**
  * Grid layout for parking-lot light surveys.
  *
- * Readings are taken at grid intersections including the edges, so a 50 ft run
- * at 10 ft spacing yields 6 positions (0, 10, 20, 30, 40, 50) — the same
- * convention as the paper VSO Lighting Survey Report form.
+ * The lot is tiled in equal square cells and a reading is taken at the centre
+ * of each, so a 50 ft run at 10 ft spacing yields 5 positions (5, 15, 25, 35,
+ * 45). Every reading then speaks for exactly the same amount of ground, which
+ * is what makes the heat map readable and the average honest.
+ *
+ * Earlier surveys read the grid intersections instead, starting on the corner
+ * (0, 10, … 50). That put the outermost readings on the lot boundary, where
+ * they own only half a cell — visible on the map as half-width squares down two
+ * sides, and quietly over-weighting the edges in the average. Those surveys
+ * keep their original layout via grid_origin; only new ones are centred.
  *
  * The paper form subdivides a lot into quadrants because you can't legibly
  * hand-draw a hundred numbered points in a 4-inch box. That constraint doesn't
@@ -38,26 +45,17 @@ const TARGET_READINGS = 82;
 const ROUND_SPACINGS_FT = [10, 15, 20, 25, 30, 35, 40, 45, 50];
 
 /**
- * Reading positions along a run at a given spacing: 0, s, 2s, … up to the last
- * full multiple, plus a final position at the lot edge when the leftover strip
- * is big enough to be worth measuring. Edges are where light falls off, so a
- * remainder is covered rather than dropped — the last cell is simply shorter
- * than the rest.
+ * How many whole cells of this spacing fit along a run — which is how many
+ * readings it takes, one per cell.
  *
- * Half a step is the cut-off. An edge point costs a whole extra row or column
- * of walking, and one placed a short hop from its neighbour reads almost the
- * same patch of ground twice while the rest of the lot is sampled evenly. Below
- * half a step that trade stops being worth it: the unread strip is narrower
- * than the gap the reading would sit in.
+ * The leftover strip past the last whole cell is left unread rather than given
+ * a narrow cell of its own. A cell narrower than the rest costs a whole row or
+ * column of walking to describe a sliver, and its reading would carry the same
+ * weight in the average as readings covering several times the ground.
  */
-const EDGE_POINT_THRESHOLD = 0.5;
-
 export function pointsAlong(runFt: number, spacingFt: number): number {
   if (!(runFt > 0) || !(spacingFt > 0)) return 0;
-  const fullSteps = Math.floor(runFt / spacingFt);
-  const remainder = runFt - fullSteps * spacingFt;
-  const base = fullSteps + 1;
-  return remainder >= EDGE_POINT_THRESHOLD * spacingFt ? base + 1 : base;
+  return Math.floor(runFt / spacingFt);
 }
 
 export interface GridOption {
@@ -70,9 +68,12 @@ export interface GridOption {
   spacing_length_ft: number;
   spacing_width_ft: number;
   points: number;
-  /** True when a short final cell was added to reach the lot edge. */
-  short_last_col: boolean;
-  short_last_row: boolean;
+  /**
+   * Ground past the last whole cell, left unread. Always less than one spacing
+   * on each axis — the price of keeping every cell the same size.
+   */
+  leftover_length_ft: number;
+  leftover_width_ft: number;
   /** Fits a single manual-log session on the meter. */
   within_capacity: boolean;
   /** Clears the booklet's 50-reading minimum. */
@@ -85,10 +86,18 @@ export interface Grid {
   rows: number;
   spacing_length_ft: number;
   spacing_width_ft: number;
-  /** Lot dimensions, when known — used to clamp the short edge cell. */
+  /** Lot dimensions, when known. */
   length_ft?: number;
   width_ft?: number;
+  /**
+   * Where the readings sit. 'center' puts each in the middle of its cell;
+   * 'edge' is the original corner-first layout. Absent means edge, because
+   * every survey that predates this field was walked that way.
+   */
+  grid_origin?: GridOrigin;
 }
+
+export type GridOrigin = 'edge' | 'center';
 
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
@@ -123,40 +132,23 @@ export function generateGridOptions(lengthFt: number, widthFt: number): GridOpti
       spacing_length_ft: spacing,
       spacing_width_ft: spacing,
       points,
-      short_last_col: lengthFt - (cols - 2) * spacing < spacing,
-      short_last_row: widthFt - (rows - 2) * spacing < spacing,
+      leftover_length_ft: round1(lengthFt - cols * spacing),
+      leftover_width_ft: round1(widthFt - rows * spacing),
       within_capacity: points <= METER_MANUAL_CAPACITY,
       meets_minimum: points >= MIN_READINGS,
       recommended: false,
     });
   }
 
-  // Usable = fits one session and clears the minimum. Rank those first, then
-  // prefer a grid whose cells are all the same size, then by closeness to the
-  // target count.
+  // Usable = fits one session and clears the minimum. Rank those first, then by
+  // closeness to the target count.
   //
-  // A squeezed axis is not just untidy. It adds a whole row or column of
-  // readings — 21 of them on a 448 x 165 ft lot — sitting closer together than
-  // every other reading, so they cost a quarter more walking and tell you about
-  // ground the neighbouring points already covered. Where a spacing exists that
-  // divides the lot cleanly and still clears the minimum, that is the better
-  // walk even when it lands further from the target count.
-  //
-  // Set above anything the count term can reach for a usable option — that term
-  // is bounded by the gap between the minimum and the target — so an evenly
-  // divided grid wins outright rather than only when the counts happen to be
-  // close. Fewer readings on a uniform grid is the better walk; a grid still
-  // has to clear the minimum to be usable at all, so this cannot trade away
-  // coverage the standard requires.
-  const SQUEEZE_PENALTY = 100;
+  // Every grid divides the lot into equal cells now, so there is no longer a
+  // squeezed-edge case to rank around: the only thing separating usable options
+  // is how much walking they cost.
   const score = (o: GridOption) => {
     const usable = o.within_capacity && o.meets_minimum;
-    const squeezed = (o.short_last_col ? 1 : 0) + (o.short_last_row ? 1 : 0);
-    return (
-      (usable ? 0 : 1_000_000) +
-      squeezed * SQUEEZE_PENALTY +
-      Math.abs(o.points - TARGET_READINGS)
-    );
+    return (usable ? 0 : 1_000_000) + Math.abs(o.points - TARGET_READINGS);
   };
   options.sort((a, b) => score(a) - score(b));
 
@@ -188,12 +180,23 @@ export function cellToPoint(col: number, row: number, cols: number): number {
 }
 
 /**
- * Position of a point in feet from the origin corner. The final row/column can
- * sit closer than the nominal spacing when a short edge cell was added, so the
- * position is clamped to the lot boundary.
+ * Position of a point in feet from the origin corner.
+ *
+ * Centred layout puts the reading in the middle of its cell, so the walk starts
+ * half a step in from the corner and every step after that is a full spacing.
+ * The legacy layout starts on the corner itself, where the last row or column
+ * could sit closer than a full step, so that one is clamped to the lot.
  */
 export function pointPosition(pointIndex: number, grid: Grid): { x_ft: number; y_ft: number } {
   const { col, row } = pointToCell(pointIndex, grid.cols);
+
+  if (grid.grid_origin !== 'edge') {
+    return {
+      x_ft: round1((col + 0.5) * grid.spacing_length_ft),
+      y_ft: round1((row + 0.5) * grid.spacing_width_ft),
+    };
+  }
+
   const x = col * grid.spacing_length_ft;
   const y = row * grid.spacing_width_ft;
   return {

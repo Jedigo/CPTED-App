@@ -370,6 +370,9 @@ export default function LightSurveyDetail() {
       rows: option.rows,
       spacing_length_ft: option.spacing_length_ft,
       spacing_width_ft: option.spacing_width_ft,
+      // Stamped when the grid is chosen, so a survey keeps the layout it was
+      // walked with even if the method changes again later.
+      grid_origin: 'center',
       // Point numbering changes with the grid, so old skips no longer mean anything.
       skipped_points: [],
     });
@@ -701,7 +704,7 @@ export default function LightSurveyDetail() {
             <div className="space-y-2">
               {(
                 [
-                  ['origin', 'Start corner — grid point 1, where the walk begins', originInput, setOriginInput],
+                  ['origin', 'Start corner — the corner the walk begins from', originInput, setOriginInput],
                   ['width', 'Short-side corner — next to the start corner', widthPtInput, setWidthPtInput],
                   ['axis', 'Long-side corner — the far end of the lot', axisInput, setAxisInput],
                 ] as const
@@ -855,15 +858,13 @@ export default function LightSurveyDetail() {
                         </span>
                       )}
                     </div>
-                    {(o.short_last_col || o.short_last_row) && (
+                    {(o.leftover_length_ft >= 1 || o.leftover_width_ft >= 1) && (
                       <p className="text-xs text-ink/50 mt-1">
-                        The last {o.short_last_col && o.short_last_row
-                          ? 'row and column sit'
-                          : o.short_last_col
-                            ? 'column sits'
-                            : 'row sits'}{' '}
-                        short of a full {o.spacing_ft} ft step so the lot edge still gets read —
-                        just walk to the edge for that one.
+                        Every cell is a full {o.spacing_ft} ft square, which leaves{' '}
+                        {o.leftover_length_ft >= 1 && <>{o.leftover_length_ft} ft at the far end</>}
+                        {o.leftover_length_ft >= 1 && o.leftover_width_ft >= 1 && ' and '}
+                        {o.leftover_width_ft >= 1 && <>{o.leftover_width_ft} ft along the far side</>}
+                        {' '}unread.
                       </p>
                     )}
                     {!usable && (
@@ -892,7 +893,13 @@ export default function LightSurveyDetail() {
           <Section
             step={2}
             title="Mark obstructions and walk the grid"
-            subtitle="Point 1 is the top-left corner; the numbering snakes back and forth so you never cross the lot twice."
+            subtitle={
+              `Every reading sits in the middle of its cell, so point 1 is half a step in from the start corner` +
+              (survey.spacing_length_ft
+                ? ` — about ${Math.round(survey.spacing_length_ft / 2)} ft along the long side and ${Math.round(survey.spacing_width_ft / 2)} ft across`
+                : '') +
+              `. The numbering snakes back and forth so you never cross the lot twice.`
+            }
           >
             <div className="bg-blue-pale border border-ink/10 rounded-lg p-4 mb-4 text-sm text-ink/80">
               <p className="font-semibold text-ink mb-2">Meter setup — check before you start</p>

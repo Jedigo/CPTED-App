@@ -132,6 +132,13 @@ export interface LightSurvey {
   spacing_length_ft: number
   spacing_width_ft: number
   /**
+   * Where readings sit within their cells. 'center' is the current method —
+   * equal square cells with a reading in the middle of each. 'edge' is the
+   * original corner-first layout, kept so surveys already walked that way keep
+   * the geometry they were walked with. Absent means 'edge'.
+   */
+  grid_origin?: 'edge' | 'center'
+  /**
    * 1-based point indices (serpentine order) that can't be stood on —
    * landscape islands, curbs, structures. Skipped points are never logged, so
    * this list is what keeps the meter's sequential Place column aligned to the

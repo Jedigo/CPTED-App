@@ -71,6 +71,13 @@
       "when": 1787000300000,
       "tag": "0009_photo_gps_accuracy",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787000400000,
+      "tag": "0010_light_grid_origin",
+      "breakpoints": true
     }
   ]
 }

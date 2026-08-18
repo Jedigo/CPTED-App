@@ -336,6 +336,7 @@ export async function pullAssessment(
             aerial_image: ls.aerial_image ?? null,
             aerial_credit: ls.aerial_credit ?? null,
             grid_flipped: ls.grid_flipped ?? false,
+            grid_origin: ls.grid_origin ?? 'edge',
             unit: ls.unit || 'fc',
           })),
         );
