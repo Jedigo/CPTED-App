@@ -32,6 +32,7 @@ import {
   parseLatLng,
   formatLatLng,
   hasGeoreference,
+  isIOS,
   surveyOrigin,
   surveyAxisPoint,
   surveyWidthPoint,
@@ -44,6 +45,10 @@ import {
 import { generateLightSurveyPDF } from '../services/pdf';
 import { compressImage } from '../services/photos';
 import LightGridMap from '../components/LightGridMap';
+import AerialCornerPicker from '../components/AerialCornerPicker';
+import { renderAerialWithGrid } from '../services/aerial-render';
+import { IMAGERY_CREDIT } from '../services/county-imagery';
+import type { AerialView } from '../services/county-imagery';
 import HeaderBackButton from '../components/HeaderBackButton';
 import ThemeToggle from '../components/ThemeToggle';
 import type { LightSurvey } from '../types';
@@ -126,18 +131,31 @@ function EarthExport({
   error: string | null;
 }) {
   const isPlan = phase === 'plan';
+  const onTablet = isIOS();
   return (
     <div className="mt-4 pt-4 border-t border-ink/10">
       <p className="text-sm font-semibold text-ink mb-1">
-        {isPlan ? 'Check the grid before you walk' : 'Map the readings on the real lot'}
+        {isPlan
+          ? onTablet
+            ? 'Carry the grid with you'
+            : 'Check the grid before you walk'
+          : 'Map the readings on the real lot'}
       </p>
       <p className="text-xs text-ink/60 mb-3 max-w-2xl">
         {isPlan ? (
-          <>
-            Drawn to scale over satellite imagery, so you can see which points land on
-            landscape islands or the building and mark them obstructed above. There are no
-            readings in it yet — this copy is for planning the walk.
-          </>
+          onTablet ? (
+            <>
+              Every point is numbered and drawn to scale on the imagery, and Google Earth shows
+              where you are standing — so you can walk to point 43 rather than pacing it out.
+              Points that turn out to be on an island or a curb can be marked obstructed above.
+            </>
+          ) : (
+            <>
+              Drawn to scale over satellite imagery, so you can see which points land on
+              landscape islands or the building and mark them obstructed above. There are no
+              readings in it yet — this copy is for planning the walk.
+            </>
+          )
         ) : (
           <>
             The same grid, now coloured by the readings you imported. This is the copy to
@@ -153,20 +171,37 @@ function EarthExport({
           disabled={!enabled}
           className="px-5 py-3 rounded-xl bg-surface border border-navy text-navy font-semibold hover:bg-blue-pale active:scale-95 transition-all disabled:opacity-40 disabled:hover:bg-surface disabled:active:scale-100"
         >
-          1. Download the map file (.kml)
+          {onTablet ? 'Send the map to Google Earth' : '1. Download the map file (.kml)'}
         </button>
-        <a
-          href="https://earth.google.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="px-5 py-3 rounded-xl bg-navy text-white font-semibold hover:bg-navy-light active:scale-95 transition-all"
-        >
-          2. Open Google Earth &#8599;
-        </a>
+        {/*
+          Google Earth Web does not run in iOS Safari, so this link is only ever
+          offered on a desktop. On an iPad the file goes to the Google Earth app
+          through the share sheet instead — a link to earth.google.com there
+          would send the assessor to a page that cannot load.
+        */}
+        {!onTablet && (
+          <a
+            href="https://earth.google.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-5 py-3 rounded-xl bg-navy text-white font-semibold hover:bg-navy-light active:scale-95 transition-all"
+          >
+            2. Open Google Earth &#8599;
+          </a>
+        )}
       </div>
 
       <p className="text-xs text-ink/50 mt-2 max-w-2xl">
-        {enabled ? (
+        {!enabled ? (
+          <>Set the start and long-side corners in step 1 and this becomes available.</>
+        ) : onTablet ? (
+          <>
+            Pick <strong className="text-ink/70">Google Earth</strong> in the share sheet and the
+            grid opens straight in the app, where it tracks your position as you walk. The app is
+            required — the Google Earth website doesn&rsquo;t work on iPad, and saving to Files
+            just buries the file.
+          </>
+        ) : (
           <>
             In Google Earth: <strong className="text-ink/70">New</strong> &rarr;{' '}
             <strong className="text-ink/70">Open local KML file</strong> &rarr; pick the file you
@@ -174,8 +209,6 @@ function EarthExport({
             can&rsquo;t display a .kml on its own — opening it in Chrome looks like nothing
             happened.
           </>
-        ) : (
-          <>Set the start and long-side corners in step 1 and this becomes available.</>
         )}
       </p>
 
@@ -192,6 +225,13 @@ function EarthExport({
     </div>
   );
 }
+
+/**
+ * Above this, a captured corner is worse than the measurement it replaces.
+ * 5 m is roughly 16 ft — about a tenth of a typical lot's short side, which is
+ * the point at which the derived width starts visibly moving the grid.
+ */
+const GPS_ACCURACY_LIMIT_M = 5;
 
 export default function LightSurveyDetail() {
   const { id, surveyId } = useParams<{ id: string; surveyId: string }>();
@@ -229,6 +269,9 @@ export default function LightSurveyDetail() {
   const [aerialError, setAerialError] = useState<string | null>(null);
   const [aerialBusy, setAerialBusy] = useState(false);
   const [locating, setLocating] = useState<'origin' | 'axis' | 'width' | null>(null);
+  const [gpsAccuracy, setGpsAccuracy] = useState<Record<string, number>>({});
+  const [pickerOpen, setPickerOpen] = useState(true);
+  const aerialView = useRef<AerialView | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const aerialRef = useRef<HTMLInputElement>(null);
   const hydrated = useRef(false);
@@ -442,6 +485,13 @@ export default function LightSurveyDetail() {
         const text = formatLatLng(here);
         setLocating(null);
 
+        // Report the accuracy the device itself claims. A corner is only as good
+        // as this number, and a handheld fix is routinely 15-30 ft — on a lot
+        // 150 ft across that is a 10-20% error in the width, which then scales
+        // every derived grid position. Field testing confirmed it: the readout
+        // is what stops a bad corner from looking like a good one.
+        setGpsAccuracy((prev) => ({ ...prev, [which]: pos.coords.accuracy }));
+
         // Build the full corner set here rather than reading it back out of the
         // inputs, whose state has not updated yet at this point.
         const current = {
@@ -483,6 +533,36 @@ export default function LightSurveyDetail() {
     } finally {
       setAerialBusy(false);
       if (aerialRef.current) aerialRef.current.value = '';
+    }
+  }
+
+  /**
+   * Compose the report picture from the imagery already on screen. Replaces the
+   * old route — export a KML, open Google Earth, screenshot it, upload it —
+   * which turned out to be device-dependent and cost an afternoon to discover.
+   */
+  async function drawAerialForReport(withReadings: boolean) {
+    if (!surveyId || !survey) return;
+    setAerialError(null);
+    if (!aerialView.current) {
+      setAerialError(
+        'Open the map in step 1 first — the report picture is drawn from the view shown there.',
+      );
+      return;
+    }
+    setAerialBusy(true);
+    try {
+      const image = await renderAerialWithGrid(aerialView.current, survey, {
+        values: withReadings ? valueMap : new Map(),
+        labelEveryPoint: !withReadings,
+      });
+      await updateLightSurvey(surveyId, { aerial_image: image, aerial_credit: IMAGERY_CREDIT });
+    } catch (err) {
+      setAerialError(
+        `Could not build the report picture. ${err instanceof Error ? err.message : ''}`.trim(),
+      );
+    } finally {
+      setAerialBusy(false);
     }
   }
 
@@ -566,8 +646,44 @@ export default function LightSurveyDetail() {
           title="Lot size"
           subtitle="Mark three corners on a satellite map and the dimensions follow — or type them in directly if you already have them."
         >
+          {/*
+            Tapping the corners on county imagery is the accurate route on an
+            iPad: the field tablets are Wi-Fi only with no GNSS, so the GPS
+            buttons below cannot place a corner well enough to survey from.
+          */}
           <div className="bg-blue-pale border border-ink/10 rounded-lg p-4 mb-4">
-            <p className="text-sm font-semibold text-ink mb-1">Corners from the map</p>
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <p className="text-sm font-semibold text-ink">Tap the corners on the map</p>
+              <button
+                type="button"
+                onClick={() => setPickerOpen((v) => !v)}
+                className="px-3 py-1.5 rounded-lg border border-ink/20 bg-surface text-ink text-xs font-semibold"
+              >
+                {pickerOpen ? 'Hide map' : 'Show map'}
+              </button>
+            </div>
+            {pickerOpen && (
+              <AerialCornerPicker
+                initialAddress={assessment?.address ?? ''}
+                corners={{
+                  origin: parseLatLng(originInput),
+                  axis: parseLatLng(axisInput),
+                  width: parseLatLng(widthPtInput),
+                }}
+                onImage={(v) => { aerialView.current = v; }}
+                onChange={(next) => {
+                  setOriginInput(next.origin ? formatLatLng(next.origin) : '');
+                  setAxisInput(next.axis ? formatLatLng(next.axis) : '');
+                  setWidthPtInput(next.width ? formatLatLng(next.width) : '');
+                  setGeoError(null);
+                  persistCorners(next.origin, next.axis, next.width);
+                }}
+              />
+            )}
+          </div>
+
+          <div className="bg-blue-pale border border-ink/10 rounded-lg p-4 mb-4">
+            <p className="text-sm font-semibold text-ink mb-1">Or type the corners in</p>
             <p className="text-xs text-ink/60 mb-3">
               In Google Maps, right-click each corner and the coordinates copy to your
               clipboard. Paste them here and the length, width, and orientation are all
@@ -612,6 +728,24 @@ export default function LightSurveyDetail() {
                       {locating === which ? 'Locating…' : 'Use GPS'}
                     </button>
                   </div>
+                  {gpsAccuracy[which] !== undefined && (
+                    <p
+                      className={`text-xs mt-1 ${
+                        gpsAccuracy[which] > GPS_ACCURACY_LIMIT_M
+                          ? 'text-score-deficient'
+                          : 'text-ink/50'
+                      }`}
+                    >
+                      GPS reported &plusmn;{Math.round(gpsAccuracy[which] * 3.28084)} ft
+                      {gpsAccuracy[which] > GPS_ACCURACY_LIMIT_M && (
+                        <>
+                          {' '}
+                          — too coarse for a corner. Right-click the corner in Google Maps
+                          instead (about &plusmn;3 ft); this fix would size the lot wrong.
+                        </>
+                      )}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
@@ -1005,14 +1139,30 @@ export default function LightSurveyDetail() {
             />
 
             <div className="mt-4 pt-4 border-t border-ink/10">
-              <p className="text-sm font-semibold text-ink mb-1">
-                Screenshot for the report
-              </p>
+              <p className="text-sm font-semibold text-ink mb-1">Picture for the report</p>
               <p className="text-xs text-ink/60 mb-3 max-w-2xl">
-                With the grid open in Google Earth, take a screenshot and add it here — it
-                goes into the report under the drawn map, so the reader sees the readings
-                over the real lot. Keep the Google attribution in frame; don&rsquo;t crop it
-                out.
+                Draws the grid straight onto the county aerial from step 1 — no second app and
+                no screenshot. It uses the view currently shown on that map, so frame the lot
+                there first.
+              </p>
+              <div className="flex gap-2 flex-wrap mb-4">
+                <button
+                  type="button"
+                  onClick={() => drawAerialForReport(readingCount > 0)}
+                  disabled={aerialBusy}
+                  className="px-5 py-3 rounded-xl bg-navy text-white font-semibold hover:bg-navy-light active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {aerialBusy
+                    ? 'Drawing…'
+                    : readingCount > 0
+                      ? 'Draw the readings on the aerial'
+                      : 'Draw the grid on the aerial'}
+                </button>
+              </div>
+
+              <p className="text-xs text-ink/60 mb-3 max-w-2xl">
+                Or add your own screenshot instead — from Google Earth or anywhere else. Keep
+                whatever attribution the source shows in frame.
               </p>
 
               {survey.aerial_image ? (

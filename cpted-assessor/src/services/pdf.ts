@@ -1592,7 +1592,9 @@ function renderLightSurvey(doc: jsPDF, data: PDFData, survey: LightSurvey): void
     doc.setFont('helvetica', 'italic');
     doc.setTextColor(120);
     const caption = doc.splitTextToSize(
-      `Measured grid over aerial imagery of ${survey.area_name}. Imagery via Google Earth.`,
+      `Measured grid over aerial imagery of ${survey.area_name}. ${
+        survey.aerial_credit ?? 'Imagery via Google Earth.'
+      }`,
       CONTENT_WIDTH,
     );
     doc.text(caption, PAGE_MARGIN, y);

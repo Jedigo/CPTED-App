@@ -179,6 +179,7 @@ router.post('/sync', async (req, res, next) => {
               meter_calibrated_on: (ls.meter_calibrated_on as string) || '',
               notes: (ls.notes as string) || '',
               aerial_image: (ls.aerial_image as string) ?? null,
+              aerial_credit: (ls.aerial_credit as string) ?? null,
               unit: (ls.unit as string) || 'fc',
               imported_filename: (ls.imported_filename as string) ?? null,
               imported_at: (ls.imported_at as string) ?? null,

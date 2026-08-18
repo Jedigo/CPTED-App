@@ -182,6 +182,14 @@ export interface LightSurvey {
    * the KML in Google Earth and screenshots it.
    */
   aerial_image: string | null
+  /**
+   * Attribution for whatever is in aerial_image, printed under it in the
+   * report. Stored rather than derived because the picture can come from two
+   * places — county imagery drawn in-app, or a screenshot the assessor took —
+   * and a report that credits the wrong source is worse than one that credits
+   * none.
+   */
+  aerial_credit: string | null
 
   // Import provenance
   unit: IlluminanceUnit

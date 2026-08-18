@@ -332,6 +332,7 @@ export async function pullAssessment(
             meter_calibrated_on: ls.meter_calibrated_on || '',
             notes: ls.notes || '',
             aerial_image: ls.aerial_image ?? null,
+            aerial_credit: ls.aerial_credit ?? null,
             grid_flipped: ls.grid_flipped ?? false,
             unit: ls.unit || 'fc',
           })),

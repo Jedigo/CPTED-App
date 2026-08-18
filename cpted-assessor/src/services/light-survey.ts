@@ -54,6 +54,7 @@ export function newLightSurvey(assessmentId: string, areaName: string): LightSur
     notes: '',
 
     aerial_image: null,
+    aerial_credit: null,
 
     unit: 'fc',
     imported_filename: null,

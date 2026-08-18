@@ -579,8 +579,15 @@ const ILLUMINANCE_STYLE_IDS = [
 
 const KML_MIME = 'application/vnd.google-earth.kml+xml';
 
-/** iPad included — iPadOS reports itself as a Mac, so touch points settle it. */
-function isIOS(): boolean {
+/**
+ * iPad included — iPadOS reports itself as a Mac, so touch points settle it.
+ *
+ * Exported because the difference is user-facing, not just a delivery detail:
+ * Google Earth Web does not run in iOS Safari, so on an iPad the file has to go
+ * to the Google Earth *app* through the share sheet. Pointing an iPad at
+ * earth.google.com sends the assessor somewhere that cannot work.
+ */
+export function isIOS(): boolean {
   if (typeof navigator === 'undefined') return false;
   return (
     /iPad|iPhone|iPod/.test(navigator.userAgent) ||

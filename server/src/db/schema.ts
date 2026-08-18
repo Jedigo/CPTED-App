@@ -138,6 +138,8 @@ export const lightSurveys = pgTable('light_surveys', {
 
   /** Base64 JPEG of the grid over satellite imagery. Nullable and often large. */
   aerial_image: text('aerial_image'),
+  /** Attribution for that image, printed beneath it in the report. */
+  aerial_credit: text('aerial_credit'),
 
   unit: varchar('unit', { length: 10 }).notNull().default('fc'),
   imported_filename: varchar('imported_filename', { length: 255 }),
