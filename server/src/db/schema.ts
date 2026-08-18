@@ -6,6 +6,7 @@ import {
   integer,
   boolean,
   real,
+  doublePrecision,
   timestamp,
   jsonb,
 } from 'drizzle-orm/pg-core';
@@ -83,6 +84,81 @@ export const photos = pgTable('photos', {
   compass_heading: real('compass_heading'),
   annotation_data: jsonb('annotation_data'),
   synced: boolean('synced').notNull().default(false),
+});
+
+/**
+ * Parking-lot light surveys. An independent record hung off an assessment —
+ * it never touches checklist scoring — so it is stored alongside rather than
+ * folded into the zone tables.
+ *
+ * Dates the assessor types (surveyed_at, meter_calibrated_on) are kept as text
+ * exactly as the device sent them. They are date-only strings, and putting a
+ * date-only value through a timestamp column round-trips it as UTC midnight,
+ * which renders as the previous day in Eastern time — the same footgun that
+ * produced two report-date bugs in this project already.
+ */
+export const lightSurveys = pgTable('light_surveys', {
+  id: uuid('id').primaryKey(),
+  assessment_id: uuid('assessment_id')
+    .notNull()
+    .references(() => assessments.id, { onDelete: 'cascade' }),
+  created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  area_name: varchar('area_name', { length: 255 }).notNull(),
+
+  length_ft: real('length_ft').notNull().default(0),
+  width_ft: real('width_ft').notNull().default(0),
+  cols: integer('cols').notNull().default(0),
+  rows: integer('rows').notNull().default(0),
+  spacing_length_ft: real('spacing_length_ft').notNull().default(0),
+  spacing_width_ft: real('spacing_width_ft').notNull().default(0),
+  skipped_points: jsonb('skipped_points').notNull().default([]),
+
+  // Double precision, not real: a latitude carries 9 significant digits and
+  // float4 holds about 7, so `real` would quietly round the corner by up to a
+  // metre — on the same order as the map accuracy the whole method depends on,
+  // and it would shift every derived grid point with it.
+  origin_lat: doublePrecision('origin_lat'),
+  origin_lng: doublePrecision('origin_lng'),
+  axis_lat: doublePrecision('axis_lat'),
+  axis_lng: doublePrecision('axis_lng'),
+  width_lat: doublePrecision('width_lat'),
+  width_lng: doublePrecision('width_lng'),
+  grid_flipped: boolean('grid_flipped').notNull().default(false),
+
+  surveyed_at: varchar('surveyed_at', { length: 40 }),
+  observers: text('observers').notNull().default(''),
+  weather: text('weather').notNull().default(''),
+  lamp_type: text('lamp_type').notNull().default(''),
+  fixture_type: text('fixture_type').notNull().default(''),
+  pole_height_ft: real('pole_height_ft'),
+  meter_type: text('meter_type').notNull().default(''),
+  meter_calibrated_on: varchar('meter_calibrated_on', { length: 40 }).notNull().default(''),
+  notes: text('notes').notNull().default(''),
+
+  /** Base64 JPEG of the grid over satellite imagery. Nullable and often large. */
+  aerial_image: text('aerial_image'),
+
+  unit: varchar('unit', { length: 10 }).notNull().default('fc'),
+  imported_filename: varchar('imported_filename', { length: 255 }),
+  imported_at: varchar('imported_at', { length: 40 }),
+});
+
+export const lightReadings = pgTable('light_readings', {
+  id: uuid('id').primaryKey(),
+  survey_id: uuid('survey_id')
+    .notNull()
+    .references(() => lightSurveys.id, { onDelete: 'cascade' }),
+  assessment_id: uuid('assessment_id')
+    .notNull()
+    .references(() => assessments.id, { onDelete: 'cascade' }),
+  point_index: integer('point_index').notNull(),
+  value_fc: real('value_fc').notNull(),
+  raw_value: real('raw_value').notNull(),
+  raw_unit: varchar('raw_unit', { length: 20 }).notNull().default(''),
+  measured_at: varchar('measured_at', { length: 40 }),
+  meter_place: integer('meter_place'),
+  source: varchar('source', { length: 20 }).notNull().default('imported'),
 });
 
 export const reports = pgTable('reports', {

@@ -267,16 +267,19 @@ This requires building a knowledge base mapping each of the 64 checklist items t
 
 ## Current Status
 
-**`main` is at v0.31.0 — parking-lot light surveys for school assessments (committed 2026-08-18, NOT yet deployed).** The two items left open from the 2026-08-17 session are resolved: the three-corner entry is verified end to end, and the "KML download did nothing" was never a download failure — the files had downloaded all along, and no installed application could open a `.kml`. See the 2026-08-18 session log.
+**`main` is at v0.32.0 — light surveys now sync to the server (deployed 2026-08-18).** v0.31.0 shipped the feature itself; v0.32.0 makes a grid plotted at the desk usable in the field, which was the point.
+
+Earlier the same day, v0.31.0 — parking-lot light surveys for school assessments. The two items left open from the 2026-08-17 session are resolved: the three-corner entry is verified end to end, and the "KML download did nothing" was never a download failure — the files had downloaded all along, and no installed application could open a `.kml`. See the 2026-08-18 session log.
 
 Earlier milestone, v0.29.1 (`d478da8`): the old liability waiver was replaced app-wide (PDF all types + on-screen Summary) with the **legal-advisor-approved disclaimer** — source of truth `CPTED Approve Disclaimer.docx` (repo root, committed) and the "Liability Waiver / Disclaimer" section below. Two paragraphs; render paths handle the break.
 
 School assessments use a **Yes/No/UTO checklist rating** instead of the 1-5 scale (team trained on the National Institute of Crime Prevention school survey: `files(1)/CPTED SCHOOL EVAL.docx`). Schools-only, gated on `isSchoolType()`; all other property types keep 1-5 untouched. Plus a full **PDF report redesign** (applies to all types): formal centered cover (star badge + "Volusia Sheriff's Office" / "Domestic Security Unit" masthead + "Crime Prevention Through Environmental Design Report" + property name/address, navy top/bottom bands, vertically centered between bands, no footer), an "Understanding CPTED" intro page, a page-numbered Table of Contents (numbering starts at the TOC), a red "CONFIDENTIAL" header on every page, and a fixed footer "CPTED Report - Volusia Sheriff's Office". School reports: no aggregate score, recommendations driven by "No" items (uncapped, no auto-generate, single High-Priority toggle), Confidentiality-of-Report section folded onto the waiver page. New star badge logo at `public/logos/volusia_sheriff_badge_star.png`.
 
 **Remaining items / To-Do:**
-- **Light surveys:** deploy v0.31.0. Untested on an iPad in the field — GPS corner capture, the share-sheet KML hand-off, and the screenshot upload are all desktop-verified only. Server-side sync and multi-file (>99 reading) imports not built.
+- **Light surveys:** untested on an iPad — GPS corner capture, the share-sheet KML hand-off, the screenshot upload, and now the sync round trip between devices are all desktop-verified only. Multi-file (>99 reading) imports still not built.
 - **Remove the 20 out-of-scope items** from the CPTED scope audit (worship 2, christian 3, schools 3, commercial Z11 12) — team decision 2026-05-21, deferred. Full work order: `files(1)/cpted-scope-audit.md`. Then a separate guidance-prose cleanup pass.
 - Update server-side zone data + PDF for townhome, worship, Christian church, school, and commercial-office assessments (server still residential-only)
+- Light-survey sync is last-write-wins per assessment, like the score tables. Two devices editing lots on the same assessment will clobber each other — fine for one-assessor-per-site, worth revisiting if that changes.
 - Voice notes feature (planned)
 - Server-side report storage (planned)
 - Photo annotation — draw arrows/circles on captured photos to highlight issues
@@ -287,6 +290,16 @@ School assessments use a **Yes/No/UTO checklist rating** instead of the 1-5 scal
 Git repo initialized. Remote: `https://github.com/Jedigo/CPTED-App.git` (branch: `main`)
 
 ## Session Log
+
+### 2026-08-18 (later) — Light-Survey Server Sync (v0.32.0, DEPLOYED)
+- **Light surveys now reach the server**, which is what makes desk-plotted grids usable in the field — the gap that prompted it: "otherwise there's no point plotting on desktop if I can't use it".
+- **Two new Postgres tables** (`light_surveys`, `light_readings`), both cascading from the assessment. Migrations `0006` (create) and `0007` (coordinates to double precision). `CREATE TABLE IF NOT EXISTS` only — no existing table is altered.
+- **Carried on the existing `/api/sync` payload** rather than new endpoints: a survey belongs to exactly one assessment, the records are small, and "Sync" keeps meaning one thing. `GET /api/assessments/:id` returns both arrays. The aerial screenshot goes inline (one per lot), unlike checklist photos which earned a separate upload path.
+- **Caught in review before testing: `real` is the wrong type for a coordinate.** float4 holds ~7 significant digits, a latitude needs 9, so `29.2668112` would have been silently rounded by up to a metre — on the order of the map accuracy the whole three-corner method depends on, and it would have shifted every derived grid point. Fixed to `double precision` in migration 0007; the round-trip test now asserts exact equality, not approximate.
+- **Date-only fields (`surveyed_at`, `meter_calibrated_on`) are stored as text, deliberately.** Putting a date-only value through a timestamp column round-trips it as UTC midnight, which renders as the previous day in Eastern — the same footgun behind the v0.24.1 and v0.24.2 report-date bugs. Asserted in the test.
+- **Deletion is guarded in both directions.** The server clears its copy only when the client actually sends a `light_surveys` key (an older PWA omits it entirely, and treating that as "delete" would wipe surveys because one iPad hadn't updated); the client clears its copy only when the server actually returns the key (mirror image). Both are covered by tests.
+- **Verified against the live server** with a throwaway assessment: push → pull → field-by-field compare (corners exact to the digit, skip list, aerial image, all 90 readings, meter place) → re-push for idempotency → an old-client push that must not wipe → cascade delete. 42 checks, all passing, and the database was confirmed back to 17 assessments / 0 surveys afterwards.
+- Local Docker needs sudo on the `work` PC, so there was no local Postgres to test against first — hence testing against production with a self-cleaning record.
 
 ### 2026-08-18 — Light Surveys: Google Earth Round Trip, Test Data, Flow Fixes (v0.31.0, COMMITTED)
 - **Closed both items left open on 2026-08-17.**

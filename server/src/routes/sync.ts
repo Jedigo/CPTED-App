@@ -1,7 +1,14 @@
 import { Router } from 'express';
 import { eq, and } from 'drizzle-orm';
 import { db } from '../db/connection.js';
-import { assessments, zoneScores, itemScores, photos } from '../db/schema.js';
+import {
+  assessments,
+  zoneScores,
+  itemScores,
+  photos,
+  lightSurveys,
+  lightReadings,
+} from '../db/schema.js';
 import { calculateZoneAverage, isZoneComplete, calculateOverallScore } from '../services/scoring.js';
 
 const router = Router();
@@ -120,6 +127,89 @@ router.post('/sync', async (req, res, next) => {
                 annotation_data: photo.annotation_data as Record<string, unknown> | null,
               })
               .where(eq(photos.id, photoId));
+          }
+        }
+      }
+
+      // 4b. Delete + reinsert light surveys and their readings.
+      //
+      // Same delete-then-insert shape as the score tables: the device is the
+      // source of truth for a survey it holds, and a survey is only ever edited
+      // on one device. Readings cascade from the survey delete, but they are
+      // cleared explicitly so a payload carrying surveys with no readings can't
+      // leave orphans behind from an earlier push.
+      //
+      // Guarded on the key being present, not merely non-empty: an older PWA
+      // build posts no light_surveys key at all, and wiping the server's copy
+      // because an out-of-date client didn't mention them would be data loss.
+      if (payload.light_surveys !== undefined) {
+        await tx.delete(lightReadings).where(eq(lightReadings.assessment_id, assessmentId));
+        await tx.delete(lightSurveys).where(eq(lightSurveys.assessment_id, assessmentId));
+
+        const surveys = (payload.light_surveys as Record<string, unknown>[]) || [];
+        if (surveys.length > 0) {
+          await tx.insert(lightSurveys).values(
+            surveys.map((ls) => ({
+              id: ls.id as string,
+              assessment_id: assessmentId,
+              created_at: ls.created_at ? new Date(ls.created_at as string) : now,
+              updated_at: ls.updated_at ? new Date(ls.updated_at as string) : now,
+              area_name: (ls.area_name as string) || 'Parking Lot',
+              length_ft: (ls.length_ft as number) ?? 0,
+              width_ft: (ls.width_ft as number) ?? 0,
+              cols: (ls.cols as number) ?? 0,
+              rows: (ls.rows as number) ?? 0,
+              spacing_length_ft: (ls.spacing_length_ft as number) ?? 0,
+              spacing_width_ft: (ls.spacing_width_ft as number) ?? 0,
+              skipped_points: (ls.skipped_points as number[]) || [],
+              origin_lat: (ls.origin_lat as number) ?? null,
+              origin_lng: (ls.origin_lng as number) ?? null,
+              axis_lat: (ls.axis_lat as number) ?? null,
+              axis_lng: (ls.axis_lng as number) ?? null,
+              width_lat: (ls.width_lat as number) ?? null,
+              width_lng: (ls.width_lng as number) ?? null,
+              grid_flipped: (ls.grid_flipped as boolean) || false,
+              surveyed_at: (ls.surveyed_at as string) ?? null,
+              observers: (ls.observers as string) || '',
+              weather: (ls.weather as string) || '',
+              lamp_type: (ls.lamp_type as string) || '',
+              fixture_type: (ls.fixture_type as string) || '',
+              pole_height_ft: (ls.pole_height_ft as number) ?? null,
+              meter_type: (ls.meter_type as string) || '',
+              meter_calibrated_on: (ls.meter_calibrated_on as string) || '',
+              notes: (ls.notes as string) || '',
+              aerial_image: (ls.aerial_image as string) ?? null,
+              unit: (ls.unit as string) || 'fc',
+              imported_filename: (ls.imported_filename as string) ?? null,
+              imported_at: (ls.imported_at as string) ?? null,
+            })),
+          );
+        }
+
+        const readings = (payload.light_readings as Record<string, unknown>[]) || [];
+        if (readings.length > 0) {
+          const surveyIds = new Set(surveys.map((ls) => ls.id as string));
+          const orphans = readings.filter((r) => !surveyIds.has(r.survey_id as string));
+          await tx.insert(lightReadings).values(
+            readings
+              .filter((r) => surveyIds.has(r.survey_id as string))
+              .map((r) => ({
+                id: r.id as string,
+                survey_id: r.survey_id as string,
+                assessment_id: assessmentId,
+                point_index: r.point_index as number,
+                value_fc: r.value_fc as number,
+                raw_value: (r.raw_value as number) ?? (r.value_fc as number),
+                raw_unit: (r.raw_unit as string) || '',
+                measured_at: (r.measured_at as string) ?? null,
+                meter_place: (r.meter_place as number) ?? null,
+                source: (r.source as string) || 'imported',
+              })),
+          );
+          if (orphans.length > 0) {
+            console.warn(
+              `Sync ${assessmentId}: dropped ${orphans.length} light readings with no matching survey`,
+            );
           }
         }
       }

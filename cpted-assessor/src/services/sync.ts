@@ -1,5 +1,12 @@
 import { db } from '../db/database';
-import type { Assessment, ZoneScore, ItemScore, Photo } from '../types';
+import type {
+  Assessment,
+  ZoneScore,
+  ItemScore,
+  Photo,
+  LightSurvey,
+  LightReading,
+} from '../types';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -57,12 +64,15 @@ export async function syncAssessment(
   onProgress?: (progress: SyncProgress) => void,
 ): Promise<SyncResult> {
   // Gather all data from IndexedDB
-  const [assessment, zoneScores, itemScores, photos] = await Promise.all([
-    db.assessments.get(assessmentId),
-    db.zone_scores.where('assessment_id').equals(assessmentId).toArray(),
-    db.item_scores.where('assessment_id').equals(assessmentId).toArray(),
-    db.photos.where('assessment_id').equals(assessmentId).toArray(),
-  ]);
+  const [assessment, zoneScores, itemScores, photos, lightSurveys, lightReadings] =
+    await Promise.all([
+      db.assessments.get(assessmentId),
+      db.zone_scores.where('assessment_id').equals(assessmentId).toArray(),
+      db.item_scores.where('assessment_id').equals(assessmentId).toArray(),
+      db.photos.where('assessment_id').equals(assessmentId).toArray(),
+      db.light_surveys.where('assessment_id').equals(assessmentId).toArray(),
+      db.light_readings.where('assessment_id').equals(assessmentId).toArray(),
+    ]);
 
   if (!assessment) throw new Error('Assessment not found');
 
@@ -75,6 +85,13 @@ export async function syncAssessment(
     zone_scores: zoneScores,
     item_scores: itemScores,
     photos: photos.map(({ blob, data, ...rest }) => rest),
+    // Light surveys ride along with the assessment rather than getting their own
+    // endpoint: they are small, they belong to exactly one assessment, and a lot
+    // plotted at the desk is useless until it reaches the iPad. The aerial
+    // screenshot goes inline — one image per lot, unlike the dozens of checklist
+    // photos that earned a separate upload path.
+    light_surveys: lightSurveys,
+    light_readings: lightReadings,
   };
 
   const syncRes = await fetch(`${API_BASE}/api/sync`, {
@@ -230,12 +247,27 @@ export async function pullAssessment(
   const data = await res.json();
 
   // Extract related data from the response
-  const { zone_scores, item_scores, photos: photoMeta, ...assessmentData } = data;
+  const {
+    zone_scores,
+    item_scores,
+    photos: photoMeta,
+    light_surveys,
+    light_readings,
+    ...assessmentData
+  } = data;
 
   // 2. Upsert assessment + scores into IndexedDB in a transaction
   onProgress?.({ phase: 'metadata', current: 1, total: 1, message: 'Saving assessment data...' });
 
-  await db.transaction('rw', [db.assessments, db.zone_scores, db.item_scores], async () => {
+  const pullTables = [
+    db.assessments,
+    db.zone_scores,
+    db.item_scores,
+    db.light_surveys,
+    db.light_readings,
+  ];
+
+  await db.transaction('rw', pullTables, async () => {
     // Upsert the assessment
     const assessment: Assessment = {
       ...assessmentData,
@@ -278,6 +310,36 @@ export async function pullAssessment(
         photo_ids: i.photo_ids || [],
       }));
       await db.item_scores.bulkPut(is);
+    }
+
+    // Light surveys. Only touched when the server actually reported the key —
+    // a server predating light-survey sync omits it, and clearing the local
+    // copy on its say-so would delete a grid the assessor plotted here.
+    if (Array.isArray(light_surveys)) {
+      await db.light_readings.where('assessment_id').equals(id).delete();
+      await db.light_surveys.where('assessment_id').equals(id).delete();
+
+      if (light_surveys.length > 0) {
+        await db.light_surveys.bulkPut(
+          light_surveys.map((ls: LightSurvey) => ({
+            ...ls,
+            skipped_points: ls.skipped_points || [],
+            observers: ls.observers || '',
+            weather: ls.weather || '',
+            lamp_type: ls.lamp_type || '',
+            fixture_type: ls.fixture_type || '',
+            meter_type: ls.meter_type || '',
+            meter_calibrated_on: ls.meter_calibrated_on || '',
+            notes: ls.notes || '',
+            aerial_image: ls.aerial_image ?? null,
+            grid_flipped: ls.grid_flipped ?? false,
+            unit: ls.unit || 'fc',
+          })),
+        );
+      }
+      if (Array.isArray(light_readings) && light_readings.length > 0) {
+        await db.light_readings.bulkPut(light_readings as LightReading[]);
+      }
     }
   });
 

@@ -2,7 +2,15 @@ import { Router } from 'express';
 import { eq } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
-import { assessments, zoneScores, itemScores, photos, reports } from '../db/schema.js';
+import {
+  assessments,
+  zoneScores,
+  itemScores,
+  photos,
+  reports,
+  lightSurveys,
+  lightReadings,
+} from '../db/schema.js';
 import { getZonesForType } from '../data/zone-registry.js';
 import { config } from '../config.js';
 import fs from 'fs/promises';
@@ -133,7 +141,7 @@ router.get('/:id', async (req, res, next) => {
       return;
     }
 
-    const [zones, items, photoRows] = await Promise.all([
+    const [zones, items, photoRows, surveys, readings] = await Promise.all([
       db.select().from(zoneScores).where(eq(zoneScores.assessment_id, req.params.id)),
       db.select().from(itemScores).where(eq(itemScores.assessment_id, req.params.id)),
       db
@@ -153,6 +161,8 @@ router.get('/:id', async (req, res, next) => {
         })
         .from(photos)
         .where(eq(photos.assessment_id, req.params.id)),
+      db.select().from(lightSurveys).where(eq(lightSurveys.assessment_id, req.params.id)),
+      db.select().from(lightReadings).where(eq(lightReadings.assessment_id, req.params.id)),
     ]);
 
     // School ratings ('yes'/'no'/'uto') are stored in the separate rating
@@ -167,6 +177,8 @@ router.get('/:id', async (req, res, next) => {
       zone_scores: zones,
       item_scores: mergedItems,
       photos: photoRows,
+      light_surveys: surveys,
+      light_readings: readings,
     });
   } catch (err) {
     next(err);
