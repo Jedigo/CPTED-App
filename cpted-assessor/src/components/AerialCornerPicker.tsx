@@ -6,6 +6,12 @@ import {
   latLngToPixel,
   centreForFocus,
   feetPerPixel,
+  cropView,
+  viewportFor,
+  covers,
+  OVERSCAN,
+  VIEW_W,
+  VIEW_H,
   ImageryError,
   IMAGERY_CREDIT,
   type AerialView,
@@ -34,6 +40,13 @@ const DRAG_THRESHOLD_PX = 8;
  */
 const MIN_SPAN_FT = 120;
 const MAX_SPAN_FT = 2500;
+
+/**
+ * How far the view may drift from the middle of the fetched image before a
+ * replacement is fetched behind it — half the available margin, which leaves
+ * the other half as room to keep panning while that fetch is in flight.
+ */
+const RECENTRE_AT = 0.5;
 
 export interface PickedCorners {
   origin: LatLng | null;
@@ -85,27 +98,64 @@ export default function AerialCornerPicker({
   const [zoomPreview, setZoomPreview] = useState<
     { scale: number; originX: number; originY: number } | null
   >(null);
+  /** One fetch at a time, so a slow drag cannot queue a request per settle. */
+  const onImageRef = useRef(onImage);
+  onImageRef.current = onImage;
+  const fetching = useRef(false);
+  const lastRequest = useRef<string | null>(null);
+  /**
+   * Only the newest request may draw. A background fetch started before an
+   * urgent one can easily answer after it — the county server's render time
+   * varies by seconds with the size asked for — and applying it would throw
+   * the view back to where it used to be.
+   */
+  const requestSeq = useRef(0);
 
-  const load = useCallback(async (c: LatLng, span: number) => {
-    setBusy(true);
-    setError(null);
-    try {
-      const v = await fetchAerial(c, span);
-      // These three must land in the same render. Clearing the transform in a
-      // later commit draws the new image once under the old offset or scale,
-      // which is the snap-back you see on release.
-      setView(v);
-      setPan(null);
-      setZoomPreview(null);
-      onImage?.(v);
-    } catch (err) {
-      setError(err instanceof ImageryError ? err.message : 'Could not load the aerial image.');
-      setPan(null);
-      setZoomPreview(null);
-    } finally {
-      setBusy(false);
-    }
-  }, [onImage]);
+  /**
+   * Fetch imagery for a view.
+   *
+   * `background` means the screen already shows the right ground and this is
+   * only replacing it with something wider or sharper: no spinner, and the
+   * live gesture transform is deliberately left alone, because the swap shows
+   * the same ground and so the transform stays valid. A foreground load is the
+   * opposite — there is nothing correct to look at, so it takes the spinner and
+   * clears the transform in the same commit that draws the new image. Splitting
+   * those two was the whole point: only the second kind can make a gesture wait.
+   *
+   * `plain` skips the margin, for the very first paint. A 2400x1800 request
+   * costs about 2 s against 0.75 s for 1200x900, which is worth paying to make
+   * later gestures free but not worth staring at before anything is on screen.
+   */
+  const load = useCallback(
+    async (c: LatLng, span: number, opts: { background?: boolean; plain?: boolean } = {}) => {
+      const background = opts.background ?? false;
+      const scale = opts.plain ? 1 : OVERSCAN;
+      const mine = ++requestSeq.current;
+      if (!background) setBusy(true);
+      setError(null);
+      try {
+        const v = await fetchAerial(c, span * scale, VIEW_W * scale, VIEW_H * scale);
+        if (requestSeq.current !== mine) return;
+        if (background) {
+          setView(v);
+        } else {
+          setView(v);
+          setPan(null);
+          setZoomPreview(null);
+        }
+      } catch (err) {
+        if (!background && requestSeq.current === mine) {
+          setError(err instanceof ImageryError ? err.message : 'Could not load the aerial image.');
+          setPan(null);
+          setZoomPreview(null);
+        }
+      } finally {
+        if (!background) setBusy(false);
+        if (requestSeq.current === mine) fetching.current = false;
+      }
+    },
+    [],
+  );
 
   // First load: an already-placed start corner wins over the address, so
   // reopening a survey shows the lot rather than the front door of the school.
@@ -113,7 +163,7 @@ export default function AerialCornerPicker({
     if (center) return;
     if (corners.origin) {
       setCenter(corners.origin);
-      load(corners.origin, spanFt);
+      load(corners.origin, spanFt, { plain: true });
       return;
     }
     let cancelled = false;
@@ -128,7 +178,7 @@ export default function AerialCornerPicker({
           return;
         }
         setCenter(found[0].location);
-        await load(found[0].location, spanFt);
+        await load(found[0].location, spanFt, { plain: true });
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof ImageryError ? err.message : 'Address lookup failed.');
@@ -158,6 +208,70 @@ export default function AerialCornerPicker({
     }
   }
 
+  /**
+   * Keep the imagery ahead of the view.
+   *
+   * Panning and zooming only move state; nothing here blocks them. This decides
+   * afterwards whether what is on screen needs replacing, and crucially whether
+   * the assessor has to watch that happen: if the fetched image still covers the
+   * view, the refresh is invisible.
+   */
+  useEffect(() => {
+    if (!view || !center) return;
+
+    const wanted = spanFt / feetPerPixel(view);
+    const fits = covers(view, center, spanFt);
+    // Within 5% the difference is invisible; chasing it would refetch forever.
+    const sharp = Math.abs(wanted - VIEW_W) / VIEW_W <= 0.05;
+    const hasMargin = view.widthPx / wanted >= OVERSCAN * 0.9;
+
+    const c = latLngToPixel(view, center);
+    const slackX = (view.widthPx - wanted) / 2;
+    const slackY = (view.heightPx - (wanted * VIEW_H) / VIEW_W) / 2;
+    const drifted =
+      Math.abs(c.x - view.widthPx / 2) > slackX * RECENTRE_AT ||
+      Math.abs(c.y - view.heightPx / 2) > slackY * RECENTRE_AT;
+
+    if (fits && sharp && hasMargin && !drifted) return;
+
+    const key = `${center.lat.toFixed(7)},${center.lng.toFixed(7)}@${Math.round(spanFt)}`;
+    // A background refresh in flight must not hold up a view with nothing
+    // correct to show; only another background refresh waits its turn.
+    if ((fetching.current && fits) || lastRequest.current === key) return;
+    lastRequest.current = key;
+    fetching.current = true;
+    // A view that is already covered is only being improved, so it can be
+    // fetched behind the assessor's back.
+    load(center, spanFt, { background: fits });
+  }, [view, center, spanFt, load]);
+
+  // What is on screen, derived rather than stored: centre and span are the only
+  // truth, so a pan or a zoom is a state change with no fetch attached.
+  const viewport = view && center ? viewportFor(view, center, spanFt) : null;
+
+  // Hand the report the picture the assessor framed. The fetch covers more
+  // ground than the screen shows, so the stored image is the cropped window —
+  // otherwise the lot would print smaller than it was framed. Cropping costs a
+  // canvas encode, so it waits for the gesture to settle rather than running
+  // on every pan.
+  useEffect(() => {
+    if (!view || !center) return;
+    const vp = viewportFor(view, center, spanFt);
+    let cancelled = false;
+    const t = setTimeout(() => {
+      cropView(view, vp.x, vp.y, vp.w, vp.h)
+        .then((cropped) => { if (!cancelled) onImageRef.current?.(cropped); })
+        .catch(() => { /* the picture on screen is still valid; the report can retry */ });
+    }, 300);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [view, center, spanFt]);
+
+  /** A point in the container, 0..1 across and down, as a pixel in the image. */
+  function toImagePx(rx: number, ry: number): { x: number; y: number } {
+    if (!viewport) return { x: 0, y: 0 };
+    return { x: viewport.x + rx * viewport.w, y: viewport.y + ry * viewport.h };
+  }
+
   function changeSpan(delta: number) {
     if (!center) return;
     // A pinch leaves the span on an arbitrary value, so step from the nearest
@@ -169,17 +283,21 @@ export default function AerialCornerPicker({
     const nextSpan =
       SPAN_STEPS_FT[Math.min(SPAN_STEPS_FT.length - 1, Math.max(0, nearest + delta))];
     if (nextSpan === spanFt) return;
+    // No fetch here. The window resizes over pixels already held and the effect
+    // decides afterwards whether a sharper one is worth requesting.
     setSpanFt(nextSpan);
-    load(center, nextSpan);
   }
 
   function place(clientX: number, clientY: number) {
     const el = imgRef.current;
-    if (!el || !view) return;
+    if (!el || !view || !viewport) return;
     const rect = el.getBoundingClientRect();
-    // The image is displayed scaled; convert back to its own pixel grid first.
-    const px = ((clientX - rect.left) / rect.width) * view.widthPx;
-    const py = ((clientY - rect.top) / rect.height) * view.heightPx;
+    // The container shows a window of the image, scaled: convert back through
+    // the window before the image's own pixel grid.
+    const { x: px, y: py } = toImagePx(
+      (clientX - rect.left) / rect.width,
+      (clientY - rect.top) / rect.height,
+    );
     const p = pixelToLatLng(view, px, py);
 
     const updated = { ...corners, [next]: p };
@@ -258,7 +376,7 @@ export default function AerialCornerPicker({
       // Deliberately NOT clearing zoomPreview here: the scaled image stays put
       // until the replacement is ready, so the view never rebounds to its old
       // size and then re-zooms.
-      if (preview && view && imgRef.current) {
+      if (preview && view && viewport && imgRef.current) {
         const nextSpan = Math.min(
           MAX_SPAN_FT,
           Math.max(MIN_SPAN_FT, p.startSpan / preview.scale),
@@ -266,14 +384,17 @@ export default function AerialCornerPicker({
         const rect = imgRef.current.getBoundingClientRect();
         const rx = p.originX / rect.width;
         const ry = p.originY / rect.height;
-        const focus = pixelToLatLng(view, rx * view.widthPx, ry * view.heightPx);
+        const at = toImagePx(rx, ry);
+        const focus = pixelToLatLng(view, at.x, at.y);
         // Keep the pinched ground point at the same place on screen. Centring
         // the new view on it instead would slide the lot sideways at the moment
         // the sharp image appears.
-        const nextCentre = centreForFocus(focus, rx, ry, nextSpan, view.widthPx, view.heightPx);
+        const nextCentre = centreForFocus(focus, rx, ry, nextSpan, VIEW_W, VIEW_H);
+        // The window resizes on pixels already held, so these land together and
+        // the preview scale is dropped in the same commit — no fetch between.
         setSpanFt(nextSpan);
         setCenter(nextCentre);
-        load(nextCentre, nextSpan);
+        setZoomPreview(null);
       } else {
         setZoomPreview(null);
       }
@@ -282,30 +403,49 @@ export default function AerialCornerPicker({
 
     const d = drag.current;
     drag.current = null;
-    if (!d || !view || !center) { setPan(null); return; }
+    if (!d || !view || !center || !viewport) { setPan(null); return; }
 
     if (d.moved < DRAG_THRESHOLD_PX) {
       setPan(null);
       place(e.clientX, e.clientY);
       return;
     }
-    // A drag re-centres the view on whatever was dragged to the middle.
+    // A drag re-centres the view on whatever was dragged to the middle. Within
+    // the fetched margin that is pure arithmetic, so the image lands in the
+    // same commit that drops the drag transform and the move looks immediate.
     const el = imgRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const dxPx = ((e.clientX - d.x) / rect.width) * view.widthPx;
-    const dyPx = ((e.clientY - d.y) / rect.height) * view.heightPx;
-    const newCentre = pixelToLatLng(view, view.widthPx / 2 - dxPx, view.heightPx / 2 - dyPx);
+    const dxPx = ((e.clientX - d.x) / rect.width) * viewport.w;
+    const dyPx = ((e.clientY - d.y) / rect.height) * viewport.h;
+    const newCentre = pixelToLatLng(
+      view,
+      viewport.x + viewport.w / 2 - dxPx,
+      viewport.y + viewport.h / 2 - dyPx,
+    );
     setCenter(newCentre);
-    // Hold the dragged position until the replacement arrives, so the view does
-    // not snap back to where it was and then jump forward again.
-    load(newCentre, spanFt);
+    setPan(null);
   }
 
   const rect =
     corners.origin && corners.axis ? deriveRectangle(corners.origin, corners.axis, corners.width) : null;
 
   const toPx = (p: LatLng) => (view ? latLngToPixel(view, p) : { x: 0, y: 0 });
+  /**
+   * Place the fetched image so the viewport window fills the container. The
+   * image is wider than the box on purpose, so it is sized past 100% and slid
+   * left — max-w-none because Tailwind's reset would otherwise cap it at the
+   * container and quietly undo the margin.
+   */
+  const frameStyle: React.CSSProperties | undefined =
+    view && viewport
+      ? {
+          width: `${(view.widthPx / viewport.w) * 100}%`,
+          height: `${(view.heightPx / viewport.h) * 100}%`,
+          left: `${(-viewport.x / viewport.w) * 100}%`,
+          top: `${(-viewport.y / viewport.h) * 100}%`,
+        }
+      : undefined;
   const panStyle: React.CSSProperties | undefined = zoomPreview
     ? {
         transform: `scale(${zoomPreview.scale})`,
@@ -393,21 +533,21 @@ export default function AerialCornerPicker({
           setPan(null);
         }}
         className="relative w-full rounded-lg overflow-hidden border border-ink/20 bg-ink/5 touch-none select-none"
-        style={{ aspectRatio: view ? `${view.widthPx} / ${view.heightPx}` : '4 / 3' }}
+        style={{ aspectRatio: `${VIEW_W} / ${VIEW_H}` }}
       >
-        {view && (
-          <>
+        {view && viewport && (
+          <div className="absolute inset-0" style={panStyle}>
             <img
               src={view.image}
               alt="County aerial imagery of the lot"
-              className="w-full h-full object-cover"
+              className="absolute max-w-none"
               draggable={false}
-              style={panStyle}
+              style={frameStyle}
             />
             <svg
               viewBox={`0 0 ${view.widthPx} ${view.heightPx}`}
-              className="absolute inset-0 w-full h-full pointer-events-none"
-              style={panStyle}
+              className="absolute pointer-events-none"
+              style={frameStyle}
             >
               {rect && corners.origin && corners.axis && corners.width && (
                 <polygon
@@ -435,7 +575,7 @@ export default function AerialCornerPicker({
                 );
               })}
             </svg>
-          </>
+          </div>
         )}
         {busy && (
           <div className="absolute top-2 right-2 px-3 py-1.5 rounded-full bg-ink/70 text-white text-xs font-semibold">

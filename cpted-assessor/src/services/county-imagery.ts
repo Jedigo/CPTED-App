@@ -284,3 +284,126 @@ export async function geocodeAddress(query: string): Promise<AddressCandidate[]>
     }))
     .filter((c) => Number.isFinite(c.location.lat) && Number.isFinite(c.location.lng));
 }
+
+/**
+ * How much more ground than the screen shows is fetched.
+ *
+ * The county service renders every request on demand — there is no tile cache
+ * on the 2024 imagery — and measurement puts that render at roughly 0.2 s fixed
+ * plus 0.3 s per megapixel, with the bytes themselves arriving in about 30 ms.
+ * The wait is therefore entirely the server drawing the picture, so the only
+ * way to make a gesture feel instant is for it to need no request at all.
+ *
+ * Fetching a margin around the view buys that: a pan inside the margin is
+ * satisfied from pixels already held, and the replacement is fetched behind an
+ * image that is still correct. Doubling the span quadruples the pixels but only
+ * about 2.4x the time, which is why the margin is affordable.
+ */
+export const OVERSCAN = 2;
+
+/**
+ * The part of a fetched view that is actually on screen, as a standalone view.
+ *
+ * With a margin fetched around the display, the stored image would otherwise be
+ * the wider picture, framing the lot smaller in the report than the assessor
+ * framed it. Cropping restores the invariant the type depends on: the image and
+ * the extent it claims to cover are the same ground.
+ */
+export async function cropView(
+  view: AerialView,
+  x: number,
+  y: number,
+  widthPx: number,
+  heightPx: number,
+): Promise<AerialView> {
+  const w = view.maxX - view.minX;
+  const h = view.maxY - view.minY;
+  const bounds: AerialBounds = {
+    minX: view.minX + (x / view.widthPx) * w,
+    maxX: view.minX + ((x + widthPx) / view.widthPx) * w,
+    maxY: view.maxY - (y / view.heightPx) * h,
+    minY: view.maxY - ((y + heightPx) / view.heightPx) * h,
+    widthPx: Math.round(widthPx),
+    heightPx: Math.round(heightPx),
+  };
+
+  const centre = fromMercator({
+    x: (bounds.minX + bounds.maxX) / 2,
+    y: (bounds.minY + bounds.maxY) / 2,
+  });
+  const spanFt =
+    ((bounds.maxX - bounds.minX) * Math.cos((centre.lat * Math.PI) / 180)) / M_PER_FT;
+
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const el = new Image();
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new ImageryError('Could not read the aerial image.'));
+    el.src = view.image;
+  });
+
+  const canvas = document.createElement('canvas');
+  canvas.width = bounds.widthPx;
+  canvas.height = bounds.heightPx;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new ImageryError('Could not crop the aerial image.');
+  ctx.drawImage(
+    img,
+    x, y, widthPx, heightPx,
+    0, 0, bounds.widthPx, bounds.heightPx,
+  );
+
+  return { ...bounds, image: canvas.toDataURL('image/jpeg', 0.9), spanFt, center: centre };
+}
+
+/**
+ * The window the assessor actually sees, in pixels — and so the ceiling on how
+ * precisely a corner can be tapped. The fetch is larger than this by OVERSCAN;
+ * this is the part of it on screen.
+ */
+export const VIEW_W = 1200;
+export const VIEW_H = 900;
+/** The window of the fetched image that is on screen, in image pixels. */
+export interface Viewport {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Where `spanFt` of ground centred on `centre` falls inside an already-fetched
+ * image.
+ *
+ * This is what replaces a network round trip on every gesture: panning and
+ * zooming move and resize this window over pixels already held, and the county
+ * server is only consulted when the window runs out of margin or gets soft.
+ */
+export function viewportFor(view: AerialView, centre: LatLng, spanFt: number): Viewport {
+  let w = spanFt / feetPerPixel(view);
+  let h = (w * VIEW_H) / VIEW_W;
+  // Never claim more ground than was fetched; the shortfall is being fetched.
+  const fit = Math.min(1, view.widthPx / w, view.heightPx / h);
+  w *= fit;
+  h *= fit;
+
+  const c = latLngToPixel(view, centre);
+  return {
+    x: Math.min(Math.max(c.x - w / 2, 0), view.widthPx - w),
+    y: Math.min(Math.max(c.y - h / 2, 0), view.heightPx - h),
+    w,
+    h,
+  };
+}
+
+/** Whether the fetched image still covers the requested view outright. */
+export function covers(view: AerialView, centre: LatLng, spanFt: number): boolean {
+  const w = spanFt / feetPerPixel(view);
+  const h = (w * VIEW_H) / VIEW_W;
+  const c = latLngToPixel(view, centre);
+  return (
+    c.x - w / 2 >= 0 &&
+    c.y - h / 2 >= 0 &&
+    c.x + w / 2 <= view.widthPx &&
+    c.y + h / 2 <= view.heightPx
+  );
+}
