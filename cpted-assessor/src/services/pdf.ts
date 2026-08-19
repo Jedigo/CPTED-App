@@ -21,6 +21,13 @@ import type {
 import type { ItemGuidance } from '../data/item-guidance';
 import { buildPointPlan, cellToPoint, pointPosition } from './light-grid';
 import {
+  SCHOOL_PROFILE_FIELDS,
+  STUDENT_TEACHER_RATIO_LABEL,
+  hasSchoolProfileContent,
+  studentTeacherRatio,
+} from './school-profile';
+import type { CrimeReport } from '../types';
+import {
   computeStats,
   formatMinReading,
   formatReading,
@@ -126,10 +133,21 @@ interface PDFData {
   badgeLogo: string | null;
   lightSurveys: LightSurvey[];
   lightReadings: LightReading[];
+  /** The analyst's crime report, if one was uploaded. One per assessment. */
+  crimeReport?: CrimeReport;
 }
 
 async function gatherAssessmentData(assessmentId: string): Promise<PDFData> {
-  const [assessment, zoneScores, itemScores, photos, badgeLogo, lightSurveys, lightReadings] =
+  const [
+    assessment,
+    zoneScores,
+    itemScores,
+    photos,
+    badgeLogo,
+    lightSurveys,
+    lightReadings,
+    crimeReports,
+  ] =
     await Promise.all([
       db.assessments.get(assessmentId),
       db.zone_scores
@@ -141,6 +159,7 @@ async function gatherAssessmentData(assessmentId: string): Promise<PDFData> {
       loadLogoBase64('/logos/volusia_sheriff_badge_star.png'),
       db.light_surveys.where('assessment_id').equals(assessmentId).sortBy('created_at'),
       db.light_readings.where('assessment_id').equals(assessmentId).toArray(),
+      db.crime_reports.where('assessment_id').equals(assessmentId).toArray(),
     ]);
 
   if (!assessment) throw new Error('Assessment not found');
@@ -162,6 +181,7 @@ async function gatherAssessmentData(assessmentId: string): Promise<PDFData> {
     badgeLogo,
     lightSurveys,
     lightReadings,
+    crimeReport: crimeReports[0],
   };
 }
 
@@ -1282,6 +1302,98 @@ function renderZoneDetails(doc: jsPDF, data: PDFData, toc: TocEntry[]): void {
   }
 }
 
+// --- School site profile ---
+//
+// The roll, capacity and staffing figures the district asks to see on the front
+// of a school report, over an overall photo of the site. Field list and wording
+// come from services/school-profile.ts, the same source the entry form uses, so
+// the page and the form cannot disagree.
+
+function renderSchoolProfile(doc: jsPDF, data: PDFData): void {
+  const profile = data.assessment.school_profile;
+  if (!profile) return;
+
+  doc.addPage();
+  let y = 24;
+
+  // School name, centered and underlined, as on the district's own page. The
+  // name is already stored on the assessment, so it is never typed twice.
+  const name = (data.assessment.homeowner_name || data.assessment.address).toUpperCase();
+  doc.setFontSize(17);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(NAVY);
+  const cx = PAGE_WIDTH / 2;
+  const nameLines = doc.splitTextToSize(name, CONTENT_WIDTH);
+  doc.text(nameLines, cx, y, { align: 'center' });
+  y += nameLines.length * 7;
+
+  const ruleW = Math.min(doc.getTextWidth(nameLines[nameLines.length - 1]) + 4, CONTENT_WIDTH);
+  doc.setDrawColor(NAVY);
+  doc.setLineWidth(0.6);
+  doc.line(cx - ruleW / 2, y - 3.5, cx + ruleW / 2, y - 3.5);
+  y += 6;
+
+  // Overall photo. Height is capped so the figures below always share the page
+  // with it — a tall portrait shot renders narrower rather than pushing them off.
+  if (profile.photo) {
+    try {
+      const props = doc.getImageProperties(profile.photo);
+      const ratio = props.height / props.width;
+      const maxH = 105;
+      let w = CONTENT_WIDTH * 0.86;
+      let h = w * ratio;
+      if (h > maxH) {
+        h = maxH;
+        w = h / ratio;
+      }
+      doc.addImage(profile.photo, 'JPEG', cx - w / 2, y, w, h);
+      doc.setDrawColor(180);
+      doc.setLineWidth(0.3);
+      doc.rect(cx - w / 2, y, w, h);
+      y += h + 5;
+    } catch {
+      // A photo that can't be decoded shouldn't cost the district the page.
+    }
+  }
+
+  if (profile.build_history.trim()) {
+    doc.setFontSize(9.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(60);
+    const caption = doc.splitTextToSize(profile.build_history.trim(), CONTENT_WIDTH * 0.86);
+    doc.text(caption, cx, y + 2, { align: 'center' });
+    y += caption.length * 4.6 + 6;
+  }
+
+  // Figures, label then value, exactly the order the approved page uses.
+  // Blank entries are left off rather than printed as an empty promise. The
+  // ratio comes last, worked out from the roll and the teacher count above it.
+  const ratio = studentTeacherRatio(profile);
+  const rows: [string, string][] = SCHOOL_PROFILE_FIELDS.map(
+    (f) => [f.label, (profile[f.key] ?? '').trim()] as [string, string],
+  );
+  if (ratio) rows.push([STUDENT_TEACHER_RATIO_LABEL, ratio]);
+
+  for (const [fieldLabel, value] of rows) {
+    if (!value) continue;
+
+    y = ensureSpace(doc, 8, y);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(NAVY);
+    const label = `${fieldLabel}:`;
+    doc.text(label, PAGE_MARGIN, y);
+    // Measure while the bold face is still active — bold is wider than normal,
+    // and measuring after the switch puts the value on top of the label.
+    const labelW = doc.getTextWidth(label);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(40);
+    doc.text(value, PAGE_MARGIN + labelW + 2, y);
+    y += 7;
+  }
+}
+
 // --- Parking-lot light surveys ---
 //
 // One section per lot walked. The figures are the four the NICP booklet asks
@@ -1755,6 +1867,59 @@ function renderLightSurveys(doc: jsPDF, data: PDFData, toc: TocEntry[]): void {
   });
 }
 
+// --- Crime analysis (merged from the analysts' own PDF) ---
+//
+// jsPDF builds pages; it cannot read them. So the analyst's document is merged
+// in afterwards by pdf-lib (mergeCrimeReport, below), and what happens here is
+// the part that has to happen *during* generation: one blank page per analyst
+// page, so that every page number and every table-of-contents entry after this
+// section is already correct by the time the numbers are stamped.
+//
+// Nothing of ours is printed in this section. The blanks are replaced wholesale
+// at merge time, so the analysts' pages appear exactly as they supplied them —
+// no divider, no preamble, no header or footer of ours over their layout.
+
+function reserveCrimeAnalysisPages(doc: jsPDF, report: CrimeReport): void {
+  // Placeholders only, replaced by the analyst's real pages at merge time.
+  for (let i = 0; i < report.page_count; i++) doc.addPage();
+}
+
+/**
+ * Swaps the placeholder pages for the analyst's real ones.
+ *
+ * Runs on the finished document, so every page number and contents entry was
+ * computed against the correct total. Returns the merged bytes.
+ */
+async function mergeCrimeReport(
+  reportBytes: ArrayBuffer,
+  crime: CrimeReport,
+  firstPlaceholderIndex: number,
+): Promise<Uint8Array> {
+  const { PDFDocument } = await import('pdf-lib');
+
+  const out = await PDFDocument.load(reportBytes);
+  const source = await PDFDocument.load(dataUrlToBytes(crime.data), { ignoreEncryption: true });
+
+  const copied = await out.copyPages(source, source.getPageIndices());
+
+  // Insert first, then drop the placeholders, so indices stay predictable:
+  // inserting at i pushes the placeholder block to the right by one each time.
+  copied.forEach((page, i) => out.insertPage(firstPlaceholderIndex + i, page));
+  for (let i = 0; i < crime.page_count; i++) {
+    out.removePage(firstPlaceholderIndex + copied.length);
+  }
+
+  return out.save();
+}
+
+function dataUrlToBytes(dataUrl: string): Uint8Array {
+  const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
 function renderRecommendations(doc: jsPDF, data: PDFData): void {
   const school = isSchoolType(data.assessment.property_type);
   doc.addPage();
@@ -2102,6 +2267,14 @@ export async function generatePDF(assessmentId: string): Promise<void> {
   doc.addPage();
   const tocPage = doc.getNumberOfPages();
 
+  // The district's site profile leads the numbered pages: it says which school
+  // this is and how many people are in it, which is the context every finding
+  // after it depends on. Omitted entirely when nothing was filled in.
+  if (isSchoolType(pt) && hasSchoolProfileContent(data.assessment.school_profile)) {
+    toc.push({ label: 'School Profile', page: doc.getNumberOfPages() + 1, level: 0 });
+    renderSchoolProfile(doc, data);
+  }
+
   toc.push({ label: 'Assessment Summary', page: doc.getNumberOfPages() + 1, level: 0 });
   renderSummaryPage(doc, data);
 
@@ -2110,6 +2283,18 @@ export async function generatePDF(assessmentId: string): Promise<void> {
   // Parking-lot light surveys, one section per lot. Skipped entirely when none
   // were walked, so reports without a lighting visit are unchanged.
   renderLightSurveys(doc, data, toc);
+
+  // The analysts' crime data, immediately after the lighting measurements and
+  // before the recommendations those two sections inform.
+  let crimeFirstPage: number | null = null;
+  if (data.crimeReport) {
+    // The contents still lists the section — that is our page describing what
+    // the report contains, and it is the only place this is named.
+    toc.push({ label: 'Crime Analysis', page: doc.getNumberOfPages() + 1, level: 0 });
+    reserveCrimeAnalysisPages(doc, data.crimeReport);
+    // 0-based index of the first placeholder.
+    crimeFirstPage = doc.getNumberOfPages() - data.crimeReport.page_count;
+  }
 
   toc.push({ label: 'Recommendations', page: doc.getNumberOfPages() + 1, level: 0 });
   renderRecommendations(doc, data);
@@ -2137,8 +2322,59 @@ export async function generatePDF(assessmentId: string): Promise<void> {
     addConfidentialHeader(doc, i);
   }
 
-  // Trigger download
-  doc.save(generateFilename(data.assessment));
+  const filename = generateFilename(data.assessment);
+
+  // No crime report: save exactly as before. The merge path is opt-in by data,
+  // so the ordinary report keeps the download behaviour already proven on the
+  // iPads rather than inheriting a new one.
+  if (!data.crimeReport || crimeFirstPage === null) {
+    doc.save(filename);
+    return;
+  }
+
+  const merged = await mergeCrimeReport(
+    doc.output('arraybuffer'),
+    data.crimeReport,
+    crimeFirstPage,
+  );
+  await deliverPdf(merged, filename);
+}
+
+/**
+ * Hands a merged PDF to the device.
+ *
+ * iOS Safari does not reliably honour `<a download>` on a blob URL, and does
+ * nothing at all with it in a standalone PWA — the same wall the KML export hit
+ * — so iOS goes through the share sheet. A cancelled share is a choice, not a
+ * failure, and must not fall through to a second delivery.
+ */
+async function deliverPdf(bytes: Uint8Array, filename: string): Promise<void> {
+  const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' });
+  const isIOS =
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  if (isIOS && typeof navigator.share === 'function') {
+    const file = new File([blob], filename, { type: 'application/pdf' });
+    if (!navigator.canShare || navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: filename });
+        return;
+      } catch (err) {
+        // Cancelled deliberately — don't shove a second copy at them.
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+      }
+    }
+  }
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 // --- Standalone light survey report ---

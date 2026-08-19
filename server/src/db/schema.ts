@@ -41,6 +41,10 @@ export const assessments = pgTable('assessments', {
   quick_wins: jsonb('quick_wins').notNull().default([]),
   notes: text('notes').notNull().default(''),
   assessor_signature: text('assessor_signature'),
+  // School-only site profile (roll, capacity, staffing, overall photo) as one
+  // JSON blob rather than a dozen columns: it is a single approved page that
+  // moves as a unit, and jsonb is already how recommendations are stored.
+  school_profile: jsonb('school_profile'),
   synced_at: timestamp('synced_at', { withTimezone: true }),
 });
 
@@ -72,6 +76,27 @@ export const itemScores = pgTable('item_scores', {
   is_na: boolean('is_na').notNull().default(false),
   notes: text('notes').notNull().default(''),
   photo_ids: jsonb('photo_ids').notNull().default([]),
+});
+
+/**
+ * Crime-data reports produced by the crime analysts, merged into the back of the
+ * CPTED report. One per assessment.
+ *
+ * The file itself lives on disk like a photo, not in the database: it is a
+ * whole PDF, and the report needs it byte-for-byte to merge its pages in.
+ */
+export const crimeReports = pgTable('crime_reports', {
+  id: uuid('id').primaryKey(),
+  assessment_id: uuid('assessment_id')
+    .notNull()
+    .references(() => assessments.id, { onDelete: 'cascade' }),
+  blob_path: varchar('blob_path', { length: 500 }).notNull(),
+  filename: varchar('filename', { length: 255 }).notNull(),
+  size_bytes: integer('size_bytes').notNull().default(0),
+  page_count: integer('page_count').notNull().default(0),
+  /** Who produced it, printed on the divider page that introduces their pages. */
+  source: varchar('source', { length: 255 }).notNull().default(''),
+  uploaded_at: varchar('uploaded_at', { length: 40 }).notNull().default(''),
 });
 
 export const photos = pgTable('photos', {

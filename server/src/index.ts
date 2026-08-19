@@ -8,6 +8,7 @@ import assessmentRoutes from './routes/assessments.js';
 import photoRoutes from './routes/photos.js';
 import syncRoutes from './routes/sync.js';
 import reportRoutes from './routes/reports.js';
+import crimeReportRoutes from './routes/crime-reports.js';
 
 const app = express();
 
@@ -26,6 +27,7 @@ app.use('/api/assessments', assessmentRoutes);
 app.use('/api', photoRoutes);
 app.use('/api', syncRoutes);
 app.use('/api', reportRoutes);
+app.use('/api', crimeReportRoutes);
 
 // Error handler (must be last)
 app.use(errorHandler);

@@ -18,6 +18,57 @@ export type TimeOfAssessment = 'daytime' | 'nighttime' | 'both'
 export type Priority = 'high' | 'medium' | 'low'
 export type RecommendationType = 'recommendation' | 'quick_win'
 
+/**
+ * Site facts for a school assessment, transcribed from what the school tells
+ * the assessor. Every value is text, not a number: the approved page writes
+ * "1,500", and the assessor is recording what they were told rather than
+ * deriving it. The staff figures in particular are never added up: the school's
+ * own total counts categories this page doesn't itemise, so a sum would
+ * contradict it.
+ *
+ * The one exception is the student-to-teacher ratio, which is computed from the
+ * roll and the teacher count — see studentTeacherRatio().
+ */
+export interface SchoolProfile {
+  /** Overall shot of the school. Base64 data URL, same rule as photos. */
+  photo: string | null
+  /** The line under the photo — when the building went up, what it replaced. */
+  build_history: string
+  student_population: string
+  max_occupancy: string
+  teachers_staff_total: string
+  admin_positions: string
+  counselors: string
+  office_staff: string
+  teachers: string
+  support_staff: string
+  kitchen_staff: string
+}
+
+/**
+ * A crime-data report produced by a crime analyst and merged into the back of
+ * the CPTED report, so the district receives one document instead of two.
+ *
+ * One per assessment. The file is kept whole rather than rasterised — its pages
+ * go into the report intact and untouched, so charts stay sharp, the text stays
+ * searchable, and nothing of ours is printed over their layout.
+ */
+export interface CrimeReport {
+  id: string
+  assessment_id: string
+  /** Original filename, shown in the UI and used for attribution. */
+  filename: string
+  /** Base64 data URL. Same storage rule as photos — Safari detaches Blobs. */
+  data: string
+  /** Bytes of the original PDF, for the size warning and the UI. */
+  size_bytes: number
+  /** Page count, known at upload so the report can reserve exactly that many. */
+  page_count: number
+  uploaded_at: string
+  /** Whether the server already holds this file. Mirrors Photo.synced. */
+  synced: boolean
+}
+
 export interface Assessment {
   id: string
   created_at: string
@@ -58,6 +109,11 @@ export interface Assessment {
   quick_wins: Recommendation[]
   notes: string
   assessor_signature: string | null
+  /**
+   * School-only site profile, printed as the first numbered page of the report.
+   * Absent until an assessor fills it in; the report simply omits the page.
+   */
+  school_profile?: SchoolProfile | null
   synced_at: string | null
 }
 

@@ -12,7 +12,7 @@ COPY drizzle/ ./drizzle/
 COPY assets/ ./assets/
 
 # Create storage directories
-RUN mkdir -p /data/photos /data/reports
+RUN mkdir -p /data/photos /data/reports /data/crime-reports
 
 ENV NODE_ENV=production
 ENV PORT=3001

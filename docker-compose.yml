@@ -30,10 +30,12 @@ services:
       DB_NAME: ${DB_NAME:-cpted}
       PHOTO_DIR: /data/photos
       REPORT_DIR: /data/reports
+      CRIME_REPORT_DIR: /data/crime-reports
       CORS_ORIGIN: "*"
     volumes:
       - photos:/data/photos
       - reports:/data/reports
+      - crime_reports:/data/crime-reports
 
   nginx:
     image: nginx:alpine
@@ -50,3 +52,4 @@ volumes:
   pgdata:
   photos:
   reports:
+  crime_reports:

@@ -85,6 +85,20 @@
       "when": 1787000500000,
       "tag": "0011_add_report_signed_on",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1787000600000,
+      "tag": "0012_add_school_profile",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1787000700000,
+      "tag": "0013_add_crime_reports",
+      "breakpoints": true
     }
   ]
 }

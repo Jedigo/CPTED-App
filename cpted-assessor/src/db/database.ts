@@ -6,6 +6,7 @@ import type {
   Photo,
   LightSurvey,
   LightReading,
+  CrimeReport,
 } from '../types';
 
 export class CPTEDDatabase extends Dexie {
@@ -15,6 +16,7 @@ export class CPTEDDatabase extends Dexie {
   photos!: Table<Photo, string>;
   light_surveys!: Table<LightSurvey, string>;
   light_readings!: Table<LightReading, string>;
+  crime_reports!: Table<CrimeReport, string>;
 
   constructor() {
     super('CPTEDAssessments');
@@ -31,6 +33,12 @@ export class CPTEDDatabase extends Dexie {
     this.version(2).stores({
       light_surveys: 'id, assessment_id, created_at',
       light_readings: 'id, survey_id, assessment_id, [survey_id+point_index]',
+    });
+
+    // v3 — crime analyst reports merged into the back of the CPTED report.
+    // Additive in the same way: nothing existing is touched.
+    this.version(3).stores({
+      crime_reports: 'id, assessment_id',
     });
   }
 }

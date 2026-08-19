@@ -11,6 +11,7 @@ export const config = {
   },
   photoDir: process.env.PHOTO_DIR || '/data/photos',
   reportDir: process.env.REPORT_DIR || '/data/reports',
+  crimeReportDir: process.env.CRIME_REPORT_DIR || '/data/crime-reports',
   cors: {
     origin: process.env.CORS_ORIGIN || '*',
   },

@@ -409,7 +409,16 @@ export default function Assessment() {
           <span className="text-white/50 text-sm hidden sm:inline">
             Zone {activeZoneIndex + 1}/{zones.length}
           </span>
-          {/* Parking-lot light surveys are a school-only feature for now. */}
+          {/* School site profile — the roll/capacity/staffing page. Schools only,
+              like the light surveys beside it. */}
+          {ratingMode && (
+            <Link
+              to={`/assessment/${id}/school`}
+              className="px-4 py-2 bg-white/10 hover:bg-white/20 active:scale-95 rounded-lg text-sm font-medium transition-all"
+            >
+              School Info
+            </Link>
+          )}
           {ratingMode && (
             <Link
               to={`/assessment/${id}/light`}

@@ -59,6 +59,12 @@ router.post('/sync', async (req, res, next) => {
         quick_wins: payload.assessment.quick_wins || [],
         notes: payload.assessment.notes || '',
         assessor_signature: payload.assessment.assessor_signature || null,
+        // Guarded like report_signed_on: a PWA older than v0.41.0 omits the key
+        // entirely, and treating that as "clear it" would wipe the district's
+        // page off the server the moment a stale iPad synced.
+        ...('school_profile' in payload.assessment
+          ? { school_profile: payload.assessment.school_profile ?? null }
+          : {}),
         synced_at: now,
       };
 

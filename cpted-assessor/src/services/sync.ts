@@ -4,6 +4,7 @@ import type {
   ZoneScore,
   ItemScore,
   Photo,
+  CrimeReport,
   LightSurvey,
   LightReading,
 } from '../types';
@@ -64,7 +65,7 @@ export async function syncAssessment(
   onProgress?: (progress: SyncProgress) => void,
 ): Promise<SyncResult> {
   // Gather all data from IndexedDB
-  const [assessment, zoneScores, itemScores, photos, lightSurveys, lightReadings] =
+  const [assessment, zoneScores, itemScores, photos, lightSurveys, lightReadings, crimeReports] =
     await Promise.all([
       db.assessments.get(assessmentId),
       db.zone_scores.where('assessment_id').equals(assessmentId).toArray(),
@@ -72,6 +73,7 @@ export async function syncAssessment(
       db.photos.where('assessment_id').equals(assessmentId).toArray(),
       db.light_surveys.where('assessment_id').equals(assessmentId).toArray(),
       db.light_readings.where('assessment_id').equals(assessmentId).toArray(),
+      db.crime_reports.where('assessment_id').equals(assessmentId).toArray(),
     ]);
 
   if (!assessment) throw new Error('Assessment not found');
@@ -153,7 +155,20 @@ export async function syncAssessment(
     );
   }
 
-  // 3. Update assessment synced_at in IndexedDB
+  // 3. The analyst's crime PDF. One per assessment and normally well under a
+  // megabyte, so no batching — but it goes through its own endpoint rather than
+  // the sync payload, for the same reason photos do.
+  const crimeReport = crimeReports[0];
+  if (crimeReport) {
+    try {
+      await uploadCrimeReport(assessmentId, crimeReport);
+      await db.crime_reports.update(crimeReport.id, { synced: true });
+    } catch (err) {
+      console.warn(`Failed to upload crime report ${crimeReport.id}:`, err);
+    }
+  }
+
+  // 4. Update assessment synced_at in IndexedDB
   const syncedAt = syncData.synced_at;
   await db.assessments.update(assessmentId, {
     synced_at: syncedAt,
@@ -166,6 +181,24 @@ export async function syncAssessment(
     synced_at: syncedAt,
     photosUploaded,
   };
+}
+
+/** Sends the analyst's PDF through its own endpoint. */
+async function uploadCrimeReport(assessmentId: string, report: CrimeReport): Promise<void> {
+  const formData = new FormData();
+  const file = new File([dataUrlToBlob(report.data)], report.filename || `${report.id}.pdf`, {
+    type: 'application/pdf',
+  });
+  formData.append('report', file);
+  formData.append('id', report.id);
+  formData.append('page_count', String(report.page_count));
+  formData.append('uploaded_at', report.uploaded_at);
+
+  const res = await fetch(`${API_BASE}/api/assessments/${assessmentId}/crime-report`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!res.ok) throw new Error(`Crime report upload failed: ${res.status}`);
 }
 
 async function uploadPhoto(assessmentId: string, photo: Photo): Promise<void> {
@@ -255,6 +288,7 @@ export async function pullAssessment(
     photos: photoMeta,
     light_surveys,
     light_readings,
+    crime_reports,
     ...assessmentData
   } = data;
 
@@ -347,7 +381,37 @@ export async function pullAssessment(
     }
   });
 
-  // 3. Download photos sequentially
+  // 3. The analyst's crime PDF, fetched from its own endpoint like a photo.
+  // Guarded on the key being present, the same way light surveys are: a server
+  // predating this feature omits it, and clearing the local copy on that basis
+  // would throw away a PDF this device holds and the server never saw.
+  if (Array.isArray(crime_reports)) {
+    await db.crime_reports.where('assessment_id').equals(id).delete();
+
+    const meta = crime_reports[0];
+    if (meta) {
+      try {
+        const res = await fetch(`${API_BASE}/api/assessments/${id}/crime-report`);
+        if (res.ok) {
+          const blob = await res.blob();
+          await db.crime_reports.put({
+            id: meta.id,
+            assessment_id: id,
+            filename: meta.filename || 'crime-analysis.pdf',
+            data: await blobToDataUrl(blob),
+            size_bytes: meta.size_bytes ?? blob.size,
+            page_count: meta.page_count ?? 0,
+            uploaded_at: meta.uploaded_at || new Date().toISOString(),
+            synced: true,
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to download crime report:', err);
+      }
+    }
+  }
+
+  // 4. Download photos sequentially
   let photosDownloaded = 0;
   const totalPhotos = photoMeta?.length || 0;
 

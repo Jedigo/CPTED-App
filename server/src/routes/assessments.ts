@@ -7,6 +7,7 @@ import {
   zoneScores,
   itemScores,
   photos,
+  crimeReports,
   reports,
   lightSurveys,
   lightReadings,
@@ -142,7 +143,7 @@ router.get('/:id', async (req, res, next) => {
       return;
     }
 
-    const [zones, items, photoRows, surveys, readings] = await Promise.all([
+    const [zones, items, photoRows, crimeReportRows, surveys, readings] = await Promise.all([
       db.select().from(zoneScores).where(eq(zoneScores.assessment_id, req.params.id)),
       db.select().from(itemScores).where(eq(itemScores.assessment_id, req.params.id)),
       db
@@ -163,6 +164,10 @@ router.get('/:id', async (req, res, next) => {
         })
         .from(photos)
         .where(eq(photos.assessment_id, req.params.id)),
+      db
+        .select()
+        .from(crimeReports)
+        .where(eq(crimeReports.assessment_id, req.params.id)),
       db.select().from(lightSurveys).where(eq(lightSurveys.assessment_id, req.params.id)),
       db.select().from(lightReadings).where(eq(lightReadings.assessment_id, req.params.id)),
     ]);
@@ -179,6 +184,9 @@ router.get('/:id', async (req, res, next) => {
       zone_scores: zones,
       item_scores: mergedItems,
       photos: photoRows,
+      // Metadata only — the PDF itself comes from its own endpoint, the same
+      // way photo blobs do.
+      crime_reports: crimeReportRows,
       light_surveys: surveys,
       light_readings: readings,
     });
@@ -205,7 +213,7 @@ router.put('/:id', async (req, res, next) => {
       'status', 'address', 'city', 'state', 'zip',
       'homeowner_name', 'homeowner_contact', 'contact_phone', 'assessor_name', 'assessor_badge_id',
       'assessment_type', 'weather_conditions', 'time_of_assessment', 'date_of_assessment',
-      'report_signed_on',
+      'report_signed_on', 'school_profile',
       'overall_score', 'top_recommendations', 'quick_wins', 'notes',
     ];
 
@@ -268,6 +276,11 @@ router.delete('/:id', async (req, res, next) => {
       .from(reports)
       .where(eq(reports.assessment_id, req.params.id));
 
+    const crimeRows = await db
+      .select({ blob_path: crimeReports.blob_path })
+      .from(crimeReports)
+      .where(eq(crimeReports.assessment_id, req.params.id));
+
     // CASCADE delete handles all related rows
     const result = await db
       .delete(assessments)
@@ -281,6 +294,15 @@ router.delete('/:id', async (req, res, next) => {
 
     // Remove photo files from disk
     for (const { blob_path } of photoRows) {
+      try {
+        await fs.unlink(blob_path);
+      } catch {
+        // File may not exist
+      }
+    }
+
+    // And the analyst's PDF, which the CASCADE only removed the row for.
+    for (const { blob_path } of crimeRows) {
       try {
         await fs.unlink(blob_path);
       } catch {
