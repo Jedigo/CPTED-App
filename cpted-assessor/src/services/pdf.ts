@@ -1288,6 +1288,53 @@ function renderZoneDetails(doc: jsPDF, data: PDFData, toc: TocEntry[]): void {
 // target — plus the grid map, which is the part a school district can read at a
 // glance where a column of 84 numbers means nothing to them.
 
+/**
+ * Plain-language orientation for whoever reads the report.
+ *
+ * The people it goes to — a principal, a facilities director, a property owner
+ * — have no reason to know what a footcandle is, or why an average on its own
+ * doesn't settle whether a lot is well lit. Without this the section is a wall
+ * of numbers. Printed once per report, above the first lot.
+ */
+const LIGHT_SURVEY_INTRO: string[] = [
+  'After dark, light levels were measured across the parking lot on an evenly spaced grid, using a hand-held light meter. Each reading is one square on the map, recorded in footcandles (fc) — roughly the light a candle gives from a foot away.',
+  'Two things are checked: how much light there is, and how evenly it is spread. Both matter. A lot can average plenty of light and still leave dark pockets between the poles, and eyes adjusted to the bright areas cannot see into those pockets. Each figure below is shown next to the level it is measured against.',
+];
+
+/** Draws the reader's-orientation box. Returns the y below it. */
+function renderLightSurveyIntro(doc: jsPDF, startY: number): number {
+  const PAD = 4;
+  const LINE = 4;
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  const paras = LIGHT_SURVEY_INTRO.map((p) => doc.splitTextToSize(p, CONTENT_WIDTH - PAD * 2));
+  const lineCount = paras.reduce((n, p) => n + p.length, 0);
+  const boxH = PAD * 2 + 5.5 + lineCount * LINE + (paras.length - 1) * 2.5;
+
+  const y = ensureSpace(doc, boxH + 6, startY);
+
+  doc.setFillColor(LIGHT_BLUE);
+  doc.rect(PAGE_MARGIN, y, CONTENT_WIDTH, boxH, 'F');
+
+  let ty = y + PAD + 3.5;
+  doc.setFontSize(9.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(NAVY);
+  doc.text('What these measurements show', PAGE_MARGIN + PAD, ty);
+  ty += 6;
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(40);
+  for (const para of paras) {
+    doc.text(para, PAGE_MARGIN + PAD, ty);
+    ty += para.length * LINE + 2.5;
+  }
+
+  return y + boxH + 6;
+}
+
 // Left gutter holds the row ruler; cells are square and capped so a narrow grid
 // doesn't blow up into giant tiles.
 const HEAT_MAP_GUTTER = 11;
@@ -1433,7 +1480,12 @@ function renderLightHeatMap(
   return y + 12;
 }
 
-function renderLightSurvey(doc: jsPDF, data: PDFData, survey: LightSurvey): void {
+function renderLightSurvey(
+  doc: jsPDF,
+  data: PDFData,
+  survey: LightSurvey,
+  showIntro = false,
+): void {
   doc.addPage();
   let y = 20;
 
@@ -1442,6 +1494,10 @@ function renderLightSurvey(doc: jsPDF, data: PDFData, survey: LightSurvey): void
   doc.setTextColor(NAVY);
   doc.text(`Lighting Measurements — ${survey.area_name}`, PAGE_MARGIN, y);
   y += 8;
+
+  // Once per report — on the first lot only, so a five-lot report doesn't
+  // repeat the same paragraph five times.
+  if (showIntro) y = renderLightSurveyIntro(doc, y);
 
   const readings = data.lightReadings
     .filter((r) => r.survey_id === survey.id)
@@ -1688,14 +1744,14 @@ function renderLightSurveys(doc: jsPDF, data: PDFData, toc: TocEntry[]): void {
     level: 0,
   });
 
-  for (const survey of data.lightSurveys) {
+  data.lightSurveys.forEach((survey, i) => {
     toc.push({
       label: survey.area_name,
       page: doc.getNumberOfPages() + 1,
       level: 1,
     });
-    renderLightSurvey(doc, data, survey);
-  }
+    renderLightSurvey(doc, data, survey, i === 0);
+  });
 }
 
 function renderRecommendations(doc: jsPDF, data: PDFData): void {
@@ -2122,7 +2178,7 @@ export async function generateLightSurveyPDF(surveyId: string): Promise<void> {
     titleLines: ['Parking Lot', 'Lighting Survey'],
     subtitle: survey.area_name,
   });
-  renderLightSurvey(doc, data, survey);
+  renderLightSurvey(doc, data, survey, true);
   renderLiabilityWaiver(doc, data);
 
   // Only the cover is front matter here (no CPTED intro, no TOC), so numbering
