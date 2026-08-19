@@ -21,6 +21,7 @@ export default function EditAssessmentInfo({ assessment, open, onClose }: Props)
   const [assessorBadgeId, setAssessorBadgeId] = useState('')
   const [assessmentType, setAssessmentType] = useState<AssessmentType>('initial')
   const [dateOfAssessment, setDateOfAssessment] = useState('')
+  const [reportSignedOn, setReportSignedOn] = useState('')
   const [timeOfAssessment, setTimeOfAssessment] = useState<TimeOfAssessment>('daytime')
   const [errors, setErrors] = useState<Record<string, boolean>>({})
   const [saving, setSaving] = useState(false)
@@ -43,6 +44,7 @@ export default function EditAssessmentInfo({ assessment, open, onClose }: Props)
       setAssessorBadgeId(assessment.assessor_badge_id ?? '')
       setAssessmentType(assessment.assessment_type)
       setDateOfAssessment(assessment.date_of_assessment)
+      setReportSignedOn(assessment.report_signed_on ?? '')
       setTimeOfAssessment(assessment.time_of_assessment)
       setErrors({})
     }
@@ -83,6 +85,12 @@ export default function EditAssessmentInfo({ assessment, open, onClose }: Props)
         assessor_badge_id: assessorBadgeId.trim() || undefined,
         assessment_type: assessmentType,
         date_of_assessment: dateOfAssessment,
+        // Blank clears it, which puts the field back to being stamped with the
+        // day the report is next generated. Explicitly null, not undefined —
+        // undefined would drop the key from the sync payload, which the server
+        // reads as "an older device that doesn't have this field" and leaves
+        // its copy alone.
+        report_signed_on: reportSignedOn || null,
         time_of_assessment: timeOfAssessment,
         updated_at: new Date().toISOString(),
       })
@@ -318,6 +326,23 @@ export default function EditAssessmentInfo({ assessment, open, onClose }: Props)
                     onChange={(e) => setDateOfAssessment(e.target.value)}
                     className="w-full rounded-lg border border-ink/20 px-4 py-3 text-base bg-surface outline-none focus:border-blue-medium focus:ring-2 focus:ring-blue-medium/30"
                   />
+                  <p className="text-xs text-ink/50 mt-1">
+                    When the property was walked.
+                  </p>
+                </div>
+
+                <div>
+                  <label className={labelClass}>Date Report Signed</label>
+                  <input
+                    type="date"
+                    value={reportSignedOn}
+                    onChange={(e) => setReportSignedOn(e.target.value)}
+                    className="w-full rounded-lg border border-ink/20 px-4 py-3 text-base bg-surface outline-none focus:border-blue-medium focus:ring-2 focus:ring-blue-medium/30"
+                  />
+                  <p className="text-xs text-ink/50 mt-1">
+                    Printed next to your signature. Fills in automatically when you complete the
+                    report — set it here if the assessment ran across several visits.
+                  </p>
                 </div>
               </div>
             </section>

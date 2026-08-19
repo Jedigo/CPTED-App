@@ -12,7 +12,13 @@ interface ServerAssessmentCardProps {
 
 function formatDate(iso: string): string {
   try {
-    return new Date(iso).toLocaleDateString('en-US', {
+    // Date-only strings (YYYY-MM-DD, which is how date_of_assessment is stored)
+    // parse as UTC midnight, which renders as the previous day in Eastern time.
+    // Force local-midnight parsing for those. Full timestamps like created_at
+    // fall through the regex and are parsed as-is.
+    const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(iso);
+    const d = dateOnly ? new Date(iso + 'T00:00:00') : new Date(iso);
+    return d.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       year: 'numeric',

@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { db } from '../db/database';
+import { ensureReportSignedOn } from './report-date';
 import { getZonesForType, getItemGuidanceForType, isWorshipType, isSchoolType, isCommercialType } from '../data/zone-registry';
 import {
   getScoreLabel,
@@ -1982,7 +1983,13 @@ function renderLiabilityWaiver(doc: jsPDF, data: PDFData): void {
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(50);
-  doc.text(formatDate(data.assessment.date_of_assessment), rightSig, y - 3);
+  // The signed date, or the walk date for assessments predating that field —
+  // so reports generated before this existed keep printing what they printed.
+  doc.text(
+    formatDate(data.assessment.report_signed_on || data.assessment.date_of_assessment),
+    rightSig,
+    y - 3,
+  );
 
   // Signature and date lines
   doc.line(leftSig, y, leftSig + lineWidth, y);
@@ -1993,7 +2000,7 @@ function renderLiabilityWaiver(doc: jsPDF, data: PDFData): void {
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(NAVY);
   doc.text('Assessor Signature', leftSig, y + 5);
-  doc.text('Date Prepared', rightSig, y + 5);
+  doc.text('Date Signed', rightSig, y + 5);
 
   // Assessor info below label — name, badge, and CPTED designation (moved here
   // from the cover so "prepared by / date" all live with the signature).
@@ -2069,6 +2076,12 @@ function renderTableOfContents(
 
 // --- Main export ---
 export async function generatePDF(assessmentId: string): Promise<void> {
+  // Stamp the signature date before reading, so the value that renders is the
+  // one that got stored. This lives in the generator rather than in each caller
+  // on purpose: a report cannot be produced without a signature date, and a
+  // future third caller shouldn't be able to bypass that by forgetting a line.
+  await ensureReportSignedOn(assessmentId);
+
   const data = await gatherAssessmentData(assessmentId);
 
   const doc = new jsPDF({
@@ -2149,6 +2162,9 @@ function generateLightFilename(assessment: Assessment, survey: LightSurvey): str
 export async function generateLightSurveyPDF(surveyId: string): Promise<void> {
   const survey = await db.light_surveys.get(surveyId);
   if (!survey) throw new Error('Light survey not found');
+
+  // This document carries the same signature block, so it signs the report too.
+  await ensureReportSignedOn(survey.assessment_id);
 
   const [assessment, readings, badgeLogo] = await Promise.all([
     db.assessments.get(survey.assessment_id),

@@ -11,6 +11,7 @@ import {
   getCompletionCounts,
 } from '../services/scoring';
 import { generatePDF } from '../services/pdf';
+import { todayLocalISO } from '../services/report-date';
 import { generateRecommendations, generateQuickWins, generateFenceRecommendation } from '../services/recommendations';
 import { syncAssessment, checkServerHealth } from '../services/sync';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
@@ -192,6 +193,11 @@ export default function Summary() {
     await db.assessments.update(id, {
       status: 'completed',
       updated_at: new Date().toISOString(),
+      // Completing the report is the moment it gets signed, so stamp the date
+      // now for the assessor who finishes today and prints next week. Never
+      // overwritten — reopening and re-completing keeps the original date, and
+      // Edit Info is where it gets changed deliberately.
+      ...(assessment?.report_signed_on ? {} : { report_signed_on: todayLocalISO() }),
     });
   }
 

@@ -1,0 +1,12 @@
+-- The day the report was completed and signed.
+--
+-- Distinct from date_of_assessment: an assessment can be walked over several
+-- visits weeks apart, so no single walk date can honestly sit above a
+-- signature. NULL on every assessment recorded before this column existed, and
+-- the report falls back to date_of_assessment for those, so their output is
+-- unchanged.
+--
+-- varchar, not timestamp: it is a date-only string, and a date-only value
+-- through a timestamp column round-trips as UTC midnight, which renders as the
+-- previous day in Eastern.
+ALTER TABLE "assessments" ADD COLUMN IF NOT EXISTS "report_signed_on" varchar(10);

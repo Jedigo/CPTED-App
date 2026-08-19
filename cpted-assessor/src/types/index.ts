@@ -37,6 +37,22 @@ export interface Assessment {
   weather_conditions: string
   time_of_assessment: TimeOfAssessment
   date_of_assessment: string
+  /**
+   * The day the report was completed and signed, as a date-only YYYY-MM-DD
+   * string. Distinct from date_of_assessment: an assessment can be walked over
+   * several visits weeks apart, and the signature attests to when the assessor
+   * stood behind the finished report, not to when the property was walked.
+   *
+   * Optional. Absent on every assessment created before this field existed, and
+   * the report falls back to date_of_assessment for those, so their output is
+   * unchanged. Stamped with today's date the first time the report is generated
+   * or marked complete, then left alone.
+   *
+   * Null rather than undefined once an assessor deliberately clears it: the
+   * server distinguishes "this device has no such field" (an older PWA, key
+   * absent — keep what you have) from "cleared on purpose" (explicit null).
+   */
+  report_signed_on?: string | null
   overall_score: number | null
   top_recommendations: Recommendation[]
   quick_wins: Recommendation[]

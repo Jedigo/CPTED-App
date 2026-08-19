@@ -1050,7 +1050,12 @@ function renderLiabilityWaiver(doc: jsPDF, data: PDFData): void {
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(50);
-  doc.text(formatDate(data.assessment.date_of_assessment), rightSig, y - 3);
+  // The signed date, falling back to the walk date for older assessments.
+  doc.text(
+    formatDate(data.assessment.report_signed_on || data.assessment.date_of_assessment),
+    rightSig,
+    y - 3,
+  );
 
   // Signature and date lines
   doc.line(leftSig, y, leftSig + lineWidth, y);

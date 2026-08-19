@@ -12,11 +12,7 @@ import type {
   TimeOfAssessment,
   ZoneScore,
 } from '../types'
-
-function todayISO(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
+import { todayLocalISO } from '../services/report-date'
 
 export default function NewAssessment() {
   const navigate = useNavigate()
@@ -32,7 +28,7 @@ export default function NewAssessment() {
   const [assessorName, setAssessorName] = useState('')
   const [assessorBadgeId, setAssessorBadgeId] = useState('')
   const [assessmentType, setAssessmentType] = useState<AssessmentType>('initial')
-  const [dateOfAssessment, setDateOfAssessment] = useState(todayISO())
+  const [dateOfAssessment, setDateOfAssessment] = useState(todayLocalISO())
   const [timeOfAssessment, setTimeOfAssessment] = useState<TimeOfAssessment>('daytime')
   const [weatherConditions] = useState('')
 

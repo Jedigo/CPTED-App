@@ -44,6 +44,7 @@ router.post('/', async (req, res, next) => {
       weather_conditions: req.body.weather_conditions || '',
       time_of_assessment: req.body.time_of_assessment || 'daytime',
       date_of_assessment: req.body.date_of_assessment,
+      report_signed_on: req.body.report_signed_on || null,
       overall_score: null,
       top_recommendations: req.body.top_recommendations || [],
       quick_wins: req.body.quick_wins || [],
@@ -204,6 +205,7 @@ router.put('/:id', async (req, res, next) => {
       'status', 'address', 'city', 'state', 'zip',
       'homeowner_name', 'homeowner_contact', 'contact_phone', 'assessor_name', 'assessor_badge_id',
       'assessment_type', 'weather_conditions', 'time_of_assessment', 'date_of_assessment',
+      'report_signed_on',
       'overall_score', 'top_recommendations', 'quick_wins', 'notes',
     ];
 

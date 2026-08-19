@@ -30,6 +30,12 @@ export const assessments = pgTable('assessments', {
   weather_conditions: varchar('weather_conditions', { length: 255 }).notNull().default(''),
   time_of_assessment: varchar('time_of_assessment', { length: 20 }).notNull().default('daytime'),
   date_of_assessment: varchar('date_of_assessment', { length: 10 }).notNull(),
+  // The day the report was signed, kept apart from the day the property was
+  // walked — an assessment can span several visits weeks apart. Date-only text
+  // for the same reason as the light-survey dates below (see the note above
+  // lightSurveys): a date-only value through a timestamp column round-trips as
+  // UTC midnight and renders as the previous day in Eastern.
+  report_signed_on: varchar('report_signed_on', { length: 10 }),
   overall_score: real('overall_score'),
   top_recommendations: jsonb('top_recommendations').notNull().default([]),
   quick_wins: jsonb('quick_wins').notNull().default([]),

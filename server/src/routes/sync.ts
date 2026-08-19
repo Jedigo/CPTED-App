@@ -44,6 +44,16 @@ router.post('/sync', async (req, res, next) => {
         weather_conditions: payload.assessment.weather_conditions || '',
         time_of_assessment: payload.assessment.time_of_assessment || 'daytime',
         date_of_assessment: payload.assessment.date_of_assessment,
+        // Only touch the signature date when the device actually sent the key.
+        // A PWA older than v0.40.0 has no such field and omits it entirely;
+        // treating that as "clear it" would wipe a signed date off the server
+        // the moment a colleague on a stale iPad synced the same assessment.
+        // An explicit null — which is what clearing the field in Edit Info
+        // produces — still clears it. Same guard as light_surveys deletion.
+        // Straight through, never new Date(): it is a date-only string.
+        ...('report_signed_on' in payload.assessment
+          ? { report_signed_on: payload.assessment.report_signed_on ?? null }
+          : {}),
         overall_score: payload.assessment.overall_score ?? null,
         top_recommendations: payload.assessment.top_recommendations || [],
         quick_wins: payload.assessment.quick_wins || [],
