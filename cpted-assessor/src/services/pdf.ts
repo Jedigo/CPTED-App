@@ -21,6 +21,9 @@ import type { ItemGuidance } from '../data/item-guidance';
 import { buildPointPlan, cellToPoint, pointPosition } from './light-grid';
 import {
   computeStats,
+  formatMinReading,
+  formatReading,
+  resolutionNote,
   darkestPoints,
   verdictLines,
   formatFc,
@@ -1285,6 +1288,24 @@ function renderZoneDetails(doc: jsPDF, data: PDFData, toc: TocEntry[]): void {
 // target — plus the grid map, which is the part a school district can read at a
 // glance where a column of 84 numbers means nothing to them.
 
+// Left gutter holds the row ruler; cells are square and capped so a narrow grid
+// doesn't blow up into giant tiles.
+const HEAT_MAP_GUTTER = 11;
+const HEAT_MAP_MAX_CELL = 13;
+
+function heatMapCellSize(cols: number): number {
+  return Math.min((CONTENT_WIDTH - HEAT_MAP_GUTTER) / cols, HEAT_MAP_MAX_CELL);
+}
+
+/**
+ * Vertical space the heat map needs, including its caption, rulers and legend.
+ * Exposed so the caller can keep the section heading on the same page as the
+ * map rather than discovering the break halfway through drawing it.
+ */
+function lightHeatMapHeight(survey: LightSurvey): number {
+  return heatMapCellSize(survey.cols) * survey.rows + 38;
+}
+
 /** Draws the reading grid as a heat map. Returns the y below it. */
 function renderLightHeatMap(
   doc: jsPDF,
@@ -1293,21 +1314,19 @@ function renderLightHeatMap(
   skipped: Set<number>,
   startY: number,
 ): number {
-  // Left gutter holds the row ruler.
-  const GUTTER = 11;
-  const availW = CONTENT_WIDTH - GUTTER;
-  const cell = Math.min(availW / survey.cols, 13);
+  const availW = CONTENT_WIDTH - HEAT_MAP_GUTTER;
+  const cell = heatMapCellSize(survey.cols);
   const gridW = cell * survey.cols;
-  const gridH = cell * survey.rows;
 
-  let y = ensureSpace(doc, gridH + 34, startY);
-  const x0 = PAGE_MARGIN + GUTTER + (availW - gridW) / 2;
+  // The caller reserves this already; kept as a backstop for any other caller.
+  let y = ensureSpace(doc, lightHeatMapHeight(survey), startY);
+  const x0 = PAGE_MARGIN + HEAT_MAP_GUTTER + (availW - gridW) / 2;
 
   doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(120);
   doc.text(
-    `${Math.round(survey.length_ft)} × ${Math.round(survey.width_ft)} ft, reading every ${survey.spacing_length_ft} ft. Distances are measured from the start corner (top left).`,
+    `${Math.round(survey.length_ft)} × ${Math.round(survey.width_ft)} ft, reading every ${survey.spacing_length_ft} ft. The rulers give each reading's distance from the start corner (top left).`,
     x0 + gridW / 2,
     y,
     { align: 'center' },
@@ -1320,7 +1339,7 @@ function renderLightHeatMap(
   doc.setTextColor(130);
   for (let col = 0; col < survey.cols; col++) {
     if (col % colStep !== 0 && col !== survey.cols - 1) continue;
-    const ft = Math.round(Math.min(col * survey.spacing_length_ft, survey.length_ft));
+    const ft = Math.round(pointPosition(cellToPoint(col, 0, survey.cols), survey).x_ft);
     doc.text(String(ft), x0 + col * cell + cell / 2, y, { align: 'center' });
   }
   y += 2.5;
@@ -1329,7 +1348,7 @@ function renderLightHeatMap(
 
   // Row ruler — feet down the left edge.
   for (let row = 0; row < survey.rows; row++) {
-    const ft = Math.round(Math.min(row * survey.spacing_width_ft, survey.width_ft));
+    const ft = Math.round(pointPosition(cellToPoint(0, row, survey.cols), survey).y_ft);
     doc.setFontSize(5.5);
     doc.setTextColor(130);
     doc.text(`${ft} ft`, x0 - 1.5, gridTop + row * cell + cell / 2 + 1, { align: 'right' });
@@ -1381,7 +1400,7 @@ function renderLightHeatMap(
       doc.rect(cx, cy, cell, cell, 'S');
     }
   }
-  y += gridH + 5;
+  y += cell * survey.rows + 5;
 
   // Legend
   doc.setFontSize(6.5);
@@ -1411,7 +1430,7 @@ function renderLightHeatMap(
   lx += 4;
   doc.text('-- no reading', lx, y + 2);
 
-  return y + 8;
+  return y + 12;
 }
 
 function renderLightSurvey(doc: jsPDF, data: PDFData, survey: LightSurvey): void {
@@ -1499,7 +1518,7 @@ function renderLightSurvey(doc: jsPDF, data: PDFData, survey: LightSurvey): void
         line.target,
         line.verdict === 'pass' ? 'Meets' : 'Below',
       ]),
-      ['Lowest reading', formatFc(stats.min_fc), '—', ''],
+      ['Lowest reading', formatMinReading(stats), '—', ''],
       ['Highest reading', formatFc(stats.max_fc), '—', ''],
       ['Max-to-min ratio', formatRatio(stats.max_min_ratio), '—', ''],
     ],
@@ -1527,8 +1546,11 @@ function renderLightSurvey(doc: jsPDF, data: PDFData, survey: LightSurvey): void
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'italic');
   doc.setTextColor(110);
+  const floorNote = resolutionNote(stats);
   const notes = doc.splitTextToSize(
-    `${verdictLines(stats)[1].detail} Uniformity is the average divided by the lowest reading, so a lower ratio is better. Standard applied: ${STANDARD_CITATION}`,
+    `${verdictLines(stats)[1].detail} Uniformity is the average divided by the lowest reading, so a lower ratio is better.${
+      floorNote ? ` ${floorNote}` : ''
+    } Standard applied: ${STANDARD_CITATION}`,
     CONTENT_WIDTH,
   );
   y = ensureSpace(doc, notes.length * 3.4 + 6, y);
@@ -1550,13 +1572,17 @@ function renderLightSurvey(doc: jsPDF, data: PDFData, survey: LightSurvey): void
   }
 
   // --- Heat map ---
+  // Reserve the heading *and* the map together. Reserving only the heading let
+  // the map break to the next page on its own, stranding "Lot Map" over an
+  // otherwise blank page.
   const valueByPoint = new Map(readings.map((r) => [r.point_index, r.value_fc]));
-  y = ensureSpace(doc, 30, y);
+  const HEADING_H = 6;
+  y = ensureSpace(doc, HEADING_H + lightHeatMapHeight(survey), y);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(NAVY);
-  doc.text('Lot Map', PAGE_MARGIN, y);
-  y += 6;
+  doc.text('Lot Map — Measured Footcandles', PAGE_MARGIN, y);
+  y += HEADING_H;
   y = renderLightHeatMap(doc, survey, valueByPoint, new Set(survey.skipped_points), y);
 
   // --- Aerial screenshot ---
@@ -1620,7 +1646,7 @@ function renderLightSurvey(doc: jsPDF, data: PDFData, survey: LightSurvey): void
       const pos = pointPosition(p.point_index, survey);
       return [
         String(p.point_index),
-        formatFc(p.value_fc),
+        formatReading(p.value_fc),
         `${Math.round(pos.x_ft)} ft across, ${Math.round(pos.y_ft)} ft down`,
       ];
     }),

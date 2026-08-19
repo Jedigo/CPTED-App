@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/database';
 import { createLightSurvey, deleteLightSurvey, hasGrid } from '../services/light-survey';
-import { computeStats, formatFc, formatRatio } from '../services/light-stats';
+import { computeStats, formatFc, formatMinReading, formatRatio } from '../services/light-stats';
 import HeaderBackButton from '../components/HeaderBackButton';
 import ThemeToggle from '../components/ThemeToggle';
 
@@ -123,7 +123,7 @@ export default function LightSurveys() {
                         Avg <strong className="text-ink">{formatFc(stats.avg_fc)}</strong>
                       </span>
                       <span className="text-ink/70">
-                        Lowest <strong className="text-ink">{formatFc(stats.min_fc)}</strong>
+                        Lowest <strong className="text-ink">{formatMinReading(stats)}</strong>
                       </span>
                       <span className="text-ink/70">
                         Uniformity{' '}

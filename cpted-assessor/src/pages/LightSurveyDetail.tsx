@@ -14,6 +14,9 @@ import {
 import { parseMeterFile, MeterParseError } from '../services/light-meter';
 import {
   computeStats,
+  formatMinReading,
+  formatReading,
+  resolutionNote,
   darkestPoints,
   verdictLines,
   formatFc,
@@ -1041,7 +1044,13 @@ export default function LightSurveyDetail() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
               {[
                 { label: 'Average', value: formatFc(stats.avg_fc), sub: formatLux(stats.avg_fc) },
-                { label: 'Lowest reading', value: formatFc(stats.min_fc), sub: formatLux(stats.min_fc) },
+                {
+                  label: 'Lowest reading',
+                  value: formatMinReading(stats),
+                  sub: stats.min_below_resolution
+                    ? 'below meter resolution'
+                    : formatLux(stats.min_fc),
+                },
                 { label: 'Highest reading', value: formatFc(stats.max_fc), sub: formatLux(stats.max_fc) },
                 {
                   label: 'Uniformity (lower is better)',
@@ -1088,11 +1097,9 @@ export default function LightSurveyDetail() {
               ))}
             </div>
 
-            {stats.has_zero_reading && (
+            {resolutionNote(stats) && (
               <p className="mb-5 text-sm text-score-critical bg-score-critical/10 border border-score-critical/30 rounded-lg p-3">
-                At least one point measured 0.0 fc — complete darkness. The uniformity ratio is
-                mathematically undefined at zero, which is why it reads as undefined above rather
-                than as a number.
+                {resolutionNote(stats)}
               </p>
             )}
 
@@ -1128,7 +1135,7 @@ export default function LightSurveyDetail() {
                     <strong className="text-ink">Point {p.point_index}</strong>
                     <span className="text-ink/60">
                       {' '}
-                      — {formatFc(p.value_fc)} · {Math.round(pos.x_ft)} ft ×{' '}
+                      — {formatReading(p.value_fc)} · {Math.round(pos.x_ft)} ft ×{' '}
                       {Math.round(pos.y_ft)} ft
                     </span>
                   </span>

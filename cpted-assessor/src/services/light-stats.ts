@@ -13,29 +13,56 @@ import { fcToLux } from './light-meter';
 export const PARKING_TARGET_AVG_FC = 3.0;
 export const PARKING_MAX_AVG_MIN_RATIO = 4;
 
+/**
+ * Dimmest illuminance the meter can report, and the floor the uniformity ratio
+ * is calculated against.
+ *
+ * The Extech SDL400 resolves footcandles to 0.1 fc (its datasheet lists
+ * resolution 0.1 Fc / 1 Lux, and its logs carry exactly one decimal), so a
+ * logged 0.0 does not mean "no light" — it means "less than the meter can
+ * read". Dividing by it is undefined, which is why the ratio used to print as
+ * undefined and told the reader nothing.
+ *
+ * Dividing by the resolution limit instead gives the best-case ratio the
+ * measurements can support: the true darkest reading is somewhere in
+ * [0, 0.1), so the true ratio can only be worse than the one reported. That is
+ * the conservative direction for a finding, and it keeps a genuinely dark lot
+ * failing 4:1 loudly instead of dropping out of the comparison.
+ */
+export const MIN_REPORTABLE_FC = 0.1;
+
 export const STANDARD_CITATION =
   'National Institute of Crime Prevention instructional guidance — parking lots: approximately 3 footcandles (30 lux) average illuminance with a uniformity ratio no worse than 4:1.';
 
 export interface LightStats {
   count: number;
+  /** Lowest reading exactly as logged, which can be 0.0. */
   min_fc: number;
   max_fc: number;
   avg_fc: number;
   /**
+   * The denominator the ratios are actually calculated against: the lowest
+   * reading, or MIN_REPORTABLE_FC when the meter logged below its resolution.
+   */
+  ratio_min_fc: number;
+  /**
    * Average-to-minimum, the conventional parking uniformity figure and the one
-   * the 4:1 target applies to. Null when a zero reading makes it undefined.
+   * the 4:1 target applies to. Null only when nothing measurable was found
+   * anywhere on the lot, which leaves nothing to compare.
    */
   avg_min_ratio: number | null;
   /** Max-to-min, which exposes bright-to-dark transitions across the lot. */
   max_min_ratio: number | null;
   /**
-   * A point read 0.0 fc — total darkness. Uniformity is mathematically
-   * undefined, and practically it's the worst possible result.
+   * The lowest reading came in under the meter's resolution (logged 0.0), so
+   * the ratios above are floored at MIN_REPORTABLE_FC and are a best case.
    */
-  has_zero_reading: boolean;
+  min_below_resolution: boolean;
   meets_average: boolean;
   meets_uniformity: boolean;
 }
+
+const EPSILON = 1e-9;
 
 export function computeStats(valuesFc: number[]): LightStats | null {
   if (valuesFc.length === 0) return null;
@@ -49,22 +76,33 @@ export function computeStats(valuesFc: number[]): LightStats | null {
     sum += v;
   }
   const avg = sum / valuesFc.length;
-  const hasZero = min <= 0;
 
-  const avgMin = hasZero ? null : avg / min;
-  const maxMin = hasZero ? null : max / min;
+  const belowResolution = min < MIN_REPORTABLE_FC;
+  const ratioMin = Math.max(min, MIN_REPORTABLE_FC);
+  // Every point under the meter's floor: there is no measured light to form a
+  // ratio from, and a floored 0.0/0.1 would read as a flattering 0.0:1 "pass"
+  // on the darkest lot possible. The average line carries that finding instead.
+  const nothingMeasured = max < MIN_REPORTABLE_FC;
+
+  const avgMin = nothingMeasured ? null : avg / ratioMin;
+  const maxMin = nothingMeasured ? null : max / ratioMin;
 
   return {
     count: valuesFc.length,
     min_fc: min,
     max_fc: max,
     avg_fc: avg,
+    ratio_min_fc: ratioMin,
     avg_min_ratio: avgMin,
     max_min_ratio: maxMin,
-    has_zero_reading: hasZero,
-    meets_average: avg >= PARKING_TARGET_AVG_FC,
-    // A zero reading fails uniformity outright rather than passing on a null.
-    meets_uniformity: avgMin !== null && avgMin <= PARKING_MAX_AVG_MIN_RATIO,
+    min_below_resolution: belowResolution,
+    // EPSILON absorbs binary-float noise only (0.4 / 0.1 is 4.000000000000001
+    // in IEEE arithmetic), so a lot landing exactly on a target isn't failed by
+    // the last bit. It is far too small to move a real reading either way.
+    meets_average: avg >= PARKING_TARGET_AVG_FC - EPSILON,
+    // A lot with nothing measurable on it fails uniformity rather than passing
+    // on a null.
+    meets_uniformity: avgMin !== null && avgMin <= PARKING_MAX_AVG_MIN_RATIO + EPSILON,
   };
 }
 
@@ -85,7 +123,7 @@ export interface IlluminanceBand {
 }
 
 export const ILLUMINANCE_BANDS: IlluminanceBand[] = [
-  { max: 0.001, bg: '#0a0a0a', fg: '#f5f5f5', label: '0.0 (dark)' },
+  { max: 0.001, bg: '#0a0a0a', fg: '#f5f5f5', label: '< 0.1 (dark)' },
   { max: 1, bg: '#b91c1c', fg: '#ffffff', label: '< 1.0' },
   { max: 2, bg: '#ea580c', fg: '#ffffff', label: '1.0 – 1.9' },
   { max: PARKING_TARGET_AVG_FC, bg: '#ca8a04', fg: '#ffffff', label: '2.0 – 2.9' },
@@ -117,10 +155,38 @@ export function formatLux(fc: number): string {
   return `${Math.round(fcToLux(fc))} lux`;
 }
 
-/** "4.2:1", or an explicit undefined marker when a point read zero. */
+/** "4.2:1", or a marker when the whole lot read below the meter's floor. */
 export function formatRatio(ratio: number | null): string {
-  if (ratio === null) return 'undefined (0.0 fc reading)';
+  if (ratio === null) return 'no measurable light';
   return `${ratio.toFixed(1)}:1`;
+}
+
+/**
+ * A single reading for display. A logged 0.0 is reported as "< 0.1 fc",
+ * because that is what the meter actually established — printing "0.0 fc"
+ * claims a precision the instrument does not have.
+ */
+export function formatReading(fc: number): string {
+  return fc < MIN_REPORTABLE_FC ? `< ${MIN_REPORTABLE_FC.toFixed(1)} fc` : formatFc(fc);
+}
+
+/** The lowest reading for display, on the same terms. */
+export function formatMinReading(stats: LightStats): string {
+  return formatReading(stats.min_fc);
+}
+
+/**
+ * The sentence explaining a floored ratio, or null when nothing was floored.
+ * Shown wherever the ratio is, so the number is never read as if the meter had
+ * resolved the dark point.
+ */
+export function resolutionNote(stats: LightStats): string | null {
+  if (!stats.min_below_resolution) return null;
+  const floor = MIN_REPORTABLE_FC.toFixed(1);
+  if (stats.avg_min_ratio === null) {
+    return `Every point read below the meter's ${floor} fc resolution, so there is no measurable light to form a uniformity ratio from. The lot is dark end to end.`;
+  }
+  return `The darkest point logged 0.0 fc, which means below the meter's ${floor} fc resolution rather than an absence of light. Uniformity is therefore calculated against ${floor} fc — the dimmest value the meter can report — so the ratio shown is the best case the readings support; the true ratio can only be worse.`;
 }
 
 /**
@@ -136,7 +202,7 @@ function sentenceCase(s: string): string {
 }
 
 export function describeUniformity(ratio: number | null): string {
-  if (ratio === null) return 'a point measured 0.0 fc, so the ratio is undefined';
+  if (ratio === null) return 'no point on the lot read above the meter\'s floor';
   if (ratio < 1.15) return 'the darkest point is close to the lot average';
   return `the darkest point is 1/${Math.round(ratio)} of the lot average`;
 }
