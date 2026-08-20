@@ -23,6 +23,7 @@ import {
   formatLux,
   formatRatio,
   STANDARD_CITATION,
+  STANDARD_SHORT,
   PARKING_TARGET_AVG_FC,
 } from '../services/light-stats';
 import {
@@ -1040,7 +1041,7 @@ export default function LightSurveyDetail() {
         )}
 
         {gridReady && stats && (
-          <Section step={4} title="Results" subtitle={`Measured against ${STANDARD_CITATION}`}>
+          <Section step={4} title="Results" subtitle={`Measured against ${STANDARD_SHORT}`}>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
               {[
                 { label: 'Average', value: formatFc(stats.avg_fc), sub: formatLux(stats.avg_fc) },
@@ -1090,7 +1091,7 @@ export default function LightSurveyDetail() {
                     </span>
                     <span className="font-semibold text-ink">{line.label}</span>
                     <span className="text-ink font-bold">{line.value}</span>
-                    <span className="text-ink/50 text-sm ml-auto">Target: {line.target}</span>
+                    <span className="text-ink/50 text-sm ml-auto">CPTED standard: {line.target}</span>
                   </div>
                   <p className="text-sm text-ink/70 mt-1.5">{line.detail}</p>
                 </div>
@@ -1331,7 +1332,7 @@ export default function LightSurveyDetail() {
         </Section>
 
         <p className="text-xs text-ink/50 mb-8">
-          Targets: {PARKING_TARGET_AVG_FC.toFixed(1)} fc average, 4:1 uniformity. {STANDARD_CITATION}
+          CPTED targets: {PARKING_TARGET_AVG_FC.toFixed(1)} fc average, 4:1 uniformity. {STANDARD_CITATION}
         </p>
       </main>
     </div>

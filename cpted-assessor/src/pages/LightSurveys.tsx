@@ -137,8 +137,8 @@ export default function LightSurveys() {
                         }`}
                       >
                         {stats.meets_average && stats.meets_uniformity
-                          ? 'Meets target'
-                          : 'Below target'}
+                          ? 'Meets CPTED standard'
+                          : 'Below CPTED standard'}
                       </span>
                     </div>
                   ) : (

@@ -31,8 +31,22 @@ export const PARKING_MAX_AVG_MIN_RATIO = 4;
  */
 export const MIN_REPORTABLE_FC = 0.1;
 
+/**
+ * What the figures are judged against, stated so it cannot be mistaken for a
+ * code compliance finding.
+ *
+ * These are CPTED crime-prevention levels from the assessors' own NICP
+ * training. Building, fire, and local codes set their own lighting
+ * requirements — Florida's educational-facility code, for instance, asks a
+ * lower average than this — and none of them are assessed here. A lot can be
+ * below the CPTED standard and still satisfy its building code, so the report
+ * says which standard it is applying rather than leaving the reader to assume.
+ */
 export const STANDARD_CITATION =
-  'National Institute of Crime Prevention instructional guidance — parking lots: approximately 3 footcandles (30 lux) average illuminance with a uniformity ratio no worse than 4:1.';
+  'These are CPTED crime-prevention standards, taken from National Institute of Crime Prevention instructional guidance for parking lots: approximately 3 footcandles (30 lux) average illuminance, with a uniformity ratio no worse than 4:1. Building, fire, and local lighting codes are separate requirements and are not assessed in this report.';
+
+/** One-line form, for a heading or subtitle where the full citation is too long. */
+export const STANDARD_SHORT = 'the CPTED parking-lot standard (NICP): 3.0 fc average, uniformity no worse than 4:1';
 
 export interface LightStats {
   count: number;

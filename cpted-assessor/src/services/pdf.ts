@@ -1412,6 +1412,7 @@ function renderSchoolProfile(doc: jsPDF, data: PDFData): void {
 const LIGHT_SURVEY_INTRO: string[] = [
   'After dark, light levels were measured across the parking lot on an evenly spaced grid, using a hand-held light meter. Each reading is one square on the map, recorded in footcandles (fc) — roughly the light a candle gives from a foot away.',
   'Two things are checked: how much light there is, and how evenly it is spread. Both matter. A lot can average plenty of light and still leave dark pockets between the poles, and eyes adjusted to the bright areas cannot see into those pockets. Each figure below is shown next to the level it is measured against.',
+  'Those levels are CPTED crime-prevention standards, drawn from the National Institute of Crime Prevention training this assessment follows. They are not building, fire, or local code requirements, which are set separately and are not assessed here.',
 ];
 
 /** Draws the reader's-orientation box. Returns the y below it. */
@@ -1674,12 +1675,12 @@ function renderLightSurvey(
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(NAVY);
-  doc.text('Measured Results', PAGE_MARGIN, y);
+  doc.text('Measured Results vs CPTED Standard', PAGE_MARGIN, y);
   y += 3;
 
   autoTable(doc, {
     startY: y,
-    head: [['Measurement', 'Result', 'Target', 'Finding']],
+    head: [['Measurement', 'Result', 'CPTED Standard', 'Finding']],
     body: [
       ...verdictLines(stats).map((line) => [
         line.label,
@@ -1719,7 +1720,7 @@ function renderLightSurvey(
   const notes = doc.splitTextToSize(
     `${verdictLines(stats)[1].detail} Uniformity is the average divided by the lowest reading, so a lower ratio is better.${
       floorNote ? ` ${floorNote}` : ''
-    } Standard applied: ${STANDARD_CITATION}`,
+    } ${STANDARD_CITATION}`,
     CONTENT_WIDTH,
   );
   y = ensureSpace(doc, notes.length * 3.4 + 6, y);

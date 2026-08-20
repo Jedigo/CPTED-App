@@ -564,7 +564,7 @@ export default function Home() {
       </div>
 
       {/* Version indicator */}
-      <p className="text-center text-[10px] text-ink/50 mt-6">v0.41.1</p>
+      <p className="text-center text-[10px] text-ink/50 mt-6">v0.41.2</p>
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog
