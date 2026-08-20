@@ -677,6 +677,7 @@ export default function LightSurveyDetail() {
                   axis: parseLatLng(axisInput),
                   width: parseLatLng(widthPtInput),
                 }}
+                readingCount={readings?.length ?? 0}
                 onImage={(v) => { aerialView.current = v; }}
                 onChange={(next) => {
                   setOriginInput(next.origin ? formatLatLng(next.origin) : '');

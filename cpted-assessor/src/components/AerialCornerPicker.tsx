@@ -8,6 +8,7 @@ import {
   feetPerPixel,
   cropView,
   viewportFor,
+  screenToImagePx,
   covers,
   OVERSCAN,
   VIEW_W,
@@ -16,7 +17,17 @@ import {
   IMAGERY_CREDIT,
   type AerialView,
 } from '../services/county-imagery';
-import { deriveRectangle, type LatLng } from '../services/light-geo';
+import {
+  deriveRectangle,
+  displacementM,
+  offsetLatLng,
+  projectWidthPoint,
+  rectangleCorners,
+  signedWidthM,
+  widthPointFrom,
+  M_PER_FT,
+  type LatLng,
+} from '../services/light-geo';
 
 /**
  * Pick a lot's corners by tapping county aerial imagery.
@@ -48,6 +59,26 @@ const MAX_SPAN_FT = 2500;
  */
 const RECENTRE_AT = 0.5;
 
+/**
+ * How close a finger must land to a corner to grab it, in SCREEN pixels — a
+ * fingertip is about 44px, so this is a little under half that, which is close
+ * enough to be deliberate without demanding precision the finger cannot give.
+ * Converted to image pixels at use, so the grab area stays the same physical
+ * size whatever the zoom.
+ */
+const HANDLE_GRAB_PX = 26;
+
+/** Magnification of the loupe, relative to what is already on screen. */
+const LOUPE_ZOOM = 2.5;
+const LOUPE_SIZE_PX = 132;
+
+/**
+ * A default rectangle to drag into place, as a fraction of the visible span.
+ * Deliberately not square, so which side is the long one is obvious at a glance.
+ */
+const SEED_LENGTH_FRAC = 0.45;
+const SEED_WIDTH_FRAC = 0.22;
+
 export interface PickedCorners {
   origin: LatLng | null;
   axis: LatLng | null;
@@ -73,10 +104,20 @@ export default function AerialCornerPicker({
   corners,
   onChange,
   onImage,
+  readingCount = 0,
 }: {
   initialAddress: string;
   corners: PickedCorners;
   onChange: (next: PickedCorners) => void;
+  /**
+   * How many readings this survey already holds.
+   *
+   * Corners are what every grid point is derived from, so moving one after the
+   * lot has been walked silently relocates readings that were taken at real
+   * places. Dragging makes that far easier to do by accident than tapping did,
+   * so once there are readings the corners are held until deliberately unlocked.
+   */
+  readingCount?: number;
   /** Handed the displayed aerial so it can be stored for the report. */
   onImage?: (view: AerialView) => void;
 }) {
@@ -87,6 +128,40 @@ export default function AerialCornerPicker({
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState(initialAddress);
   const [next, setNext] = useState<CornerKey>('origin');
+
+  /**
+   * Corners as they look mid-drag, before anything is committed.
+   *
+   * onChange writes through to the database, so firing it on every pointer move
+   * would be a write per frame — and now a revision bump per frame with it.
+   * The draft is what the overlay and the dimensions read from while a finger
+   * is down; onChange is called once, on lift.
+   */
+  const [draft, setDraft] = useState<PickedCorners | null>(null);
+  // Pointer handlers close over the render they were created in, so the commit
+  // reads the draft through a ref rather than a value that may be a frame old.
+  const draftRef = useRef<PickedCorners | null>(null);
+  const handleDrag = useRef<
+    | { kind: 'corner'; key: CornerKey; widthM: number | null }
+    | { kind: 'body'; start: LatLng; from: PickedCorners }
+    | null
+  >(null);
+  /** Magnified view under the finger, so the corner is not hidden by it. */
+  const [loupe, setLoupe] = useState<
+    { imgX: number; imgY: number; screenX: number; screenY: number; mag: number } | null
+  >(null);
+  /**
+   * Container width in screen pixels.
+   *
+   * Needed to draw the grab ring at the size the finger actually grabs: the
+   * overlay's units are image pixels, and the conversion between the two is the
+   * container width, not the fetched image width. Without measuring it, the
+   * ring shown and the area hit-tested are different sizes on every screen but
+   * one — which is worse than drawing no ring at all, because it looks precise.
+   */
+  const [containerW, setContainerW] = useState(0);
+  const [unlocked, setUnlocked] = useState(false);
+  const locked = readingCount > 0 && !unlocked;
   const imgRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; y: number; moved: number } | null>(null);
   const [pan, setPan] = useState<{ x: number; y: number } | null>(null);
@@ -297,32 +372,164 @@ export default function AerialCornerPicker({
     load(center, nextSpan);
   }
 
-  function place(clientX: number, clientY: number) {
+  /**
+   * Screen point -> the image's own pixel grid.
+   *
+   * Shared by tapping, dragging and hit-testing, so the three cannot disagree
+   * about where a finger is. The gesture compensation is the load-bearing part:
+   * a pan or pinch can still be held on screen while its replacement is
+   * fetched, leaving the picture offset or scaled from where the coordinate
+   * maths puts it. Undo that first, or a corner placed during the wait lands
+   * somewhere else entirely with nothing about it looking wrong.
+   */
+  function clientToImagePx(
+    clientX: number,
+    clientY: number,
+  ): { x: number; y: number; rect: DOMRect } | null {
     const el = imgRef.current;
-    if (!el || !view || !viewport) return;
+    if (!el || !view || !viewport) return null;
     const rect = el.getBoundingClientRect();
-    let cx = clientX - rect.left;
-    let cy = clientY - rect.top;
-    // A gesture can still be held on screen while its replacement is fetched,
-    // so the picture sits offset or scaled from where the coordinate maths puts
-    // it. Undo that before reading the tap: otherwise a corner placed during
-    // the wait lands somewhere else entirely, and nothing about it looks wrong.
-    if (zoomPreview) {
-      cx = zoomPreview.originX + (cx - zoomPreview.originX) / zoomPreview.scale;
-      cy = zoomPreview.originY + (cy - zoomPreview.originY) / zoomPreview.scale;
-    } else if (pan) {
-      cx -= pan.x;
-      cy -= pan.y;
-    }
-    // The container shows a window of the image, scaled: convert back through
-    // the window before the image's own pixel grid.
-    const { x: px, y: py } = toImagePx(cx / rect.width, cy / rect.height);
-    const p = pixelToLatLng(view, px, py);
+    const { x, y } = screenToImagePx(
+      clientX - rect.left,
+      clientY - rect.top,
+      rect.width,
+      rect.height,
+      viewport,
+      { pan, zoom: zoomPreview },
+    );
+    return { x, y, rect };
+  }
+
+  function clientToLatLng(clientX: number, clientY: number): LatLng | null {
+    const at = clientToImagePx(clientX, clientY);
+    if (!at || !view) return null;
+    return pixelToLatLng(view, at.x, at.y);
+  }
+
+  function place(clientX: number, clientY: number) {
+    if (locked) return;
+    const p = clientToLatLng(clientX, clientY);
+    if (!p) return;
 
     const updated = { ...corners, [next]: p };
     onChange(updated);
     const remaining = ORDER.filter((k) => !updated[k]);
     setNext(remaining[0] ?? next);
+  }
+
+  /**
+   * The unentered fourth corner, in ground coordinates.
+   *
+   * The rectangle is defined by three corners; the fourth is wherever the other
+   * two sides meet. Derived rather than stored, so it cannot disagree with them.
+   */
+  function lotOutline(c: PickedCorners): LatLng[] | null {
+    if (!c.origin || !c.axis) return null;
+    return rectangleCorners(c.origin, c.axis, c.width);
+  }
+
+  /** Image pixels per screen pixel, so a finger-sized radius stays finger-sized. */
+  function imagePxPerScreenPx(rect: DOMRect): number {
+    if (!viewport || rect.width === 0) return 1;
+    return viewport.w / rect.width;
+  }
+
+  /** Is this image-pixel point inside the lot outline? */
+  function insideLot(c: PickedCorners, x: number, y: number): boolean {
+    const outline = lotOutline(c);
+    if (!outline || !view) return false;
+    const poly = outline.map((p) => latLngToPixel(view, p));
+    let hit = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const a = poly[i];
+      const b = poly[j];
+      if (a.y > y !== b.y > y && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) {
+        hit = !hit;
+      }
+    }
+    return hit;
+  }
+
+  /**
+   * What a finger landing here would grab: a corner, the lot body, or nothing
+   * (in which case the gesture is a pan, exactly as before).
+   *
+   * Corners win over the body, and the nearest corner wins, so overlapping grab
+   * areas on a small lot still resolve to what the finger is closest to.
+   */
+  function hitTest(clientX: number, clientY: number): CornerKey | 'body' | null {
+    if (locked || !view) return null;
+    const at = clientToImagePx(clientX, clientY);
+    if (!at) return null;
+    const grab = HANDLE_GRAB_PX * imagePxPerScreenPx(at.rect);
+
+    let best: { key: CornerKey; d: number } | null = null;
+    for (const k of ORDER) {
+      const c = corners[k];
+      if (!c) continue;
+      const p = latLngToPixel(view, c);
+      const d = Math.hypot(p.x - at.x, p.y - at.y);
+      if (d <= grab && (!best || d < best.d)) best = { key: k, d };
+    }
+    if (best) return best.key;
+    return insideLot(corners, at.x, at.y) ? 'body' : null;
+  }
+
+  /**
+   * Drop a rectangle in the middle of the view to drag onto the lot.
+   *
+   * Removes the blank "now tap three things" state, which is the part that
+   * reads as fiddly. Laid out north-up because there is nothing yet to infer a
+   * bearing from — rotating it is what dragging the corners is for.
+   */
+  function seedBox() {
+    if (!center || locked) return;
+    const halfLen = (spanFt * SEED_LENGTH_FRAC * M_PER_FT) / 2;
+    const halfWid = (spanFt * SEED_WIDTH_FRAC * M_PER_FT) / 2;
+    const seeded: PickedCorners = {
+      origin: offsetLatLng(center, -halfLen, halfWid),
+      axis: offsetLatLng(center, halfLen, halfWid),
+      width: offsetLatLng(center, -halfLen, -halfWid),
+    };
+    onChange(seeded);
+    setNext('origin');
+  }
+
+  useEffect(() => {
+    const el = imgRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    setContainerW(el.getBoundingClientRect().width);
+    const ro = new ResizeObserver(([entry]) => {
+      setContainerW(entry.contentRect.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  /** Position the magnifier on the point being moved, away from the finger. */
+  function updateLoupe(clientX: number, clientY: number, at: LatLng) {
+    const conv = clientToImagePx(clientX, clientY);
+    if (!conv || !view) return;
+    const p = latLngToPixel(view, at);
+    const perScreen = imagePxPerScreenPx(conv.rect);
+    setLoupe({
+      imgX: p.x,
+      imgY: p.y,
+      screenX: clientX - conv.rect.left,
+      screenY: clientY - conv.rect.top,
+      // Magnify relative to what is already displayed, not to the raw image, so
+      // the loupe is always the same amount closer than the picture behind it.
+      mag: LOUPE_ZOOM / perScreen,
+    });
+  }
+
+  /** Write the dragged position through, once, on lift. */
+  function commitDraft() {
+    const d = draftRef.current;
+    handleDrag.current = null;
+    setLoupe(null);
+    setDraft(null);
+    if (d) onChange(d);
   }
 
   function pointerDistance(): number {
@@ -344,6 +551,10 @@ export default function AerialCornerPicker({
       // what stops the second finger landing from being read as a tap later.
       drag.current = null;
       setPan(null);
+      // A corner already moved under the finger stays where it was put — the
+      // assessor can see where it is, and silently springing it back would be
+      // the more surprising outcome.
+      commitDraft();
       const rect = imgRef.current.getBoundingClientRect();
       const mid = pointerMidpoint();
       pinch.current = {
@@ -355,6 +566,32 @@ export default function AerialCornerPicker({
       return;
     }
     if (pointers.current.size === 1) {
+      // A finger on a corner (or inside the lot) moves the rectangle instead of
+      // the map. Anywhere else and this is the pan it always was.
+      const hit = hitTest(e.clientX, e.clientY);
+      if (hit) {
+        const start = clientToLatLng(e.clientX, e.clientY);
+        if (start) {
+          handleDrag.current =
+            hit === 'body'
+              ? { kind: 'body', start, from: corners }
+              : {
+                  kind: 'corner',
+                  key: hit,
+                  // The lot's width, captured before it moves, so dragging the
+                  // far end rotates the rectangle without also resizing it.
+                  widthM:
+                    corners.origin && corners.axis && corners.width
+                      ? signedWidthM(corners.origin, corners.axis, corners.width)
+                      : null,
+                };
+          draftRef.current = corners;
+          setDraft(corners);
+          if (hit !== 'body') setNext(hit);
+          updateLoupe(e.clientX, e.clientY, hit === 'body' ? start : corners[hit]!);
+          return;
+        }
+      }
       drag.current = { x: e.clientX, y: e.clientY, moved: 0 };
     }
   }
@@ -375,6 +612,46 @@ export default function AerialCornerPicker({
       return;
     }
 
+    const h = handleDrag.current;
+    if (h) {
+      const p = clientToLatLng(e.clientX, e.clientY);
+      if (!p) return;
+      let updated: PickedCorners;
+      if (h.kind === 'corner') {
+        const base = draftRef.current ?? corners;
+        // The width handle controls how wide the lot is and nothing else: the
+        // grid only ever uses the perpendicular distance, so snapping here
+        // means the box drawn on screen is the box that gets walked.
+        const moved =
+          h.key === 'width' && base.origin && base.axis
+            ? projectWidthPoint(base.origin, base.axis, p)
+            : p;
+        updated = { ...base, [h.key]: moved };
+
+        // Moving either end of the long side swings the perpendicular, so the
+        // width point has to be carried round with it — otherwise the handle
+        // drifts off the corner it controls and the lot silently changes width
+        // while the assessor is only trying to line up the length.
+        if (h.key !== 'width' && h.widthM !== null && updated.origin && updated.axis) {
+          updated.width = widthPointFrom(updated.origin, updated.axis, h.widthM);
+        }
+      } else {
+        // Slide the whole rectangle by the ground distance the finger covered,
+        // measured from where it went down — so the lot keeps its shape and
+        // bearing exactly, and rounding cannot accumulate across the drag.
+        const move = displacementM(h.start, p);
+        updated = {
+          origin: h.from.origin ? offsetLatLng(h.from.origin, move.east, move.north) : null,
+          axis: h.from.axis ? offsetLatLng(h.from.axis, move.east, move.north) : null,
+          width: h.from.width ? offsetLatLng(h.from.width, move.east, move.north) : null,
+        };
+      }
+      draftRef.current = updated;
+      setDraft(updated);
+      updateLoupe(e.clientX, e.clientY, h.kind === 'corner' ? p : (updated.origin ?? p));
+      return;
+    }
+
     const d = drag.current;
     if (!d) return;
     const dx = e.clientX - d.x;
@@ -384,6 +661,11 @@ export default function AerialCornerPicker({
   }
   function onPointerUp(e: React.PointerEvent) {
     pointers.current.delete(e.pointerId);
+
+    if (handleDrag.current) {
+      commitDraft();
+      return;
+    }
 
     if (pinch.current) {
       // Finish on the first lift; a lingering finger must not restart a drag
@@ -462,8 +744,11 @@ export default function AerialCornerPicker({
     load(newCentre, spanFt);
   }
 
+  // What the overlay and the readout show: the drag in progress if there is
+  // one, otherwise the committed corners.
+  const live = draft ?? corners;
   const rect =
-    corners.origin && corners.axis ? deriveRectangle(corners.origin, corners.axis, corners.width) : null;
+    live.origin && live.axis ? deriveRectangle(live.origin, live.axis, live.width) : null;
 
   const toPx = (p: LatLng) => (view ? latLngToPixel(view, p) : { x: 0, y: 0 });
   /**
@@ -538,7 +823,17 @@ export default function AerialCornerPicker({
             {corners[k] ? ' ✓' : ''}
           </button>
         ))}
-        {placed.length > 0 && (
+        {placed.length === 0 && (
+          <button
+            type="button"
+            onClick={seedBox}
+            disabled={busy || !center || locked}
+            className="px-3 py-2 rounded-lg text-xs font-semibold border border-navy bg-navy text-white disabled:opacity-40"
+          >
+            Draw a box
+          </button>
+        )}
+        {placed.length > 0 && !locked && (
           <button
             type="button"
             onClick={() => { onChange({ origin: null, axis: null, width: null }); setNext('origin'); }}
@@ -549,9 +844,41 @@ export default function AerialCornerPicker({
         )}
       </div>
 
+      {locked && (
+        <p className="text-xs mb-2 bg-amber-100 text-amber-800 border border-amber-300 rounded-lg p-3">
+          This lot already has {readingCount} reading{readingCount === 1 ? '' : 's'}. Every grid
+          point is worked out from these corners, so moving one now would relocate readings that
+          were taken at real places on the ground.{' '}
+          <button
+            type="button"
+            onClick={() => setUnlocked(true)}
+            className="underline font-semibold"
+          >
+            Unlock corners anyway
+          </button>
+        </p>
+      )}
+
       <p className="text-xs text-ink/60 mb-2">
-        Tap the <strong className="text-ink">{LABEL[next].toLowerCase()}</strong> on the picture.
-        Drag to move, pinch to zoom.{' '}
+        {locked ? (
+          <>Corners are held while this lot has readings. Drag to pan, pinch to zoom.</>
+        ) : placed.length === 0 ? (
+          <>
+            Tap <strong className="text-ink">Draw a box</strong> and drag it onto the lot, or tap
+            the <strong className="text-ink">{LABEL[next].toLowerCase()}</strong> on the picture.
+          </>
+        ) : placed.length < ORDER.length ? (
+          <>
+            Tap the <strong className="text-ink">{LABEL[next].toLowerCase()}</strong> on the
+            picture. Corners already placed can be dragged.
+          </>
+        ) : (
+          <>
+            Drag a <strong className="text-ink">corner</strong> to reshape the lot, or drag{' '}
+            <strong className="text-ink">inside</strong> it to move the whole box. Drag outside to
+            pan, pinch to zoom.
+          </>
+        )}{' '}
         {view && <>Each pixel is about {feetPerPixel(view).toFixed(2)} ft.</>}
       </p>
 
@@ -564,6 +891,7 @@ export default function AerialCornerPicker({
           pointers.current.delete(e.pointerId);
           pinch.current = null;
           drag.current = null;
+          commitDraft();
           setZoomPreview(null);
           setPan(null);
         }}
@@ -584,31 +912,88 @@ export default function AerialCornerPicker({
               className="absolute pointer-events-none"
               style={frameStyle}
             >
-              {rect && corners.origin && corners.axis && corners.width && (
-                <polygon
-                  points={(() => {
-                    const o = toPx(corners.origin!);
-                    const a = toPx(corners.axis!);
-                    const w = toPx(corners.width!);
-                    const fourth = { x: a.x + (w.x - o.x), y: a.y + (w.y - o.y) };
-                    return `${o.x},${o.y} ${a.x},${a.y} ${fourth.x},${fourth.y} ${w.x},${w.y}`;
-                  })()}
-                  fill="rgba(34,211,238,0.15)"
-                  stroke="#22d3ee"
-                  strokeWidth={3}
-                />
-              )}
+              {(() => {
+                // The rectangle the grid is actually laid out on — not a
+                // parallelogram through the three taps, which is what this drew
+                // before and which differs the moment the picks are off square.
+                const outline = lotOutline(live);
+                if (!outline) return null;
+                return (
+                  <polygon
+                    points={outline.map((p) => { const q = toPx(p); return `${q.x},${q.y}`; }).join(' ')}
+                    fill="rgba(34,211,238,0.15)"
+                    stroke="#22d3ee"
+                    strokeWidth={3}
+                  />
+                );
+              })()}
               {ORDER.map((k) => {
-                const c = corners[k];
+                const c = live[k];
                 if (!c) return null;
                 const p = toPx(c);
+                const dragging = handleDrag.current?.kind === 'corner' && handleDrag.current.key === k;
+                // The ring is drawn at the size the finger actually grabs, so
+                // what looks tappable is what is tappable.
+                // Screen pixels -> image pixels, which is what the overlay is
+                // drawn in. Falls back to no ring rather than a wrong one.
+                const grab =
+                  viewport && containerW > 0
+                    ? HANDLE_GRAB_PX * (viewport.w / containerW)
+                    : 0;
                 return (
                   <g key={k}>
-                    <circle cx={p.x} cy={p.y} r={14} fill="none" stroke={COLOR[k]} strokeWidth={5} />
+                    {!locked && grab > 0 && (
+                      <circle
+                        cx={p.x}
+                        cy={p.y}
+                        r={grab}
+                        fill={COLOR[k]}
+                        opacity={dragging ? 0.28 : 0.12}
+                      />
+                    )}
+                    <circle
+                      cx={p.x}
+                      cy={p.y}
+                      r={14}
+                      fill="none"
+                      stroke={COLOR[k]}
+                      strokeWidth={dragging ? 7 : 5}
+                    />
                     <circle cx={p.x} cy={p.y} r={3} fill={COLOR[k]} />
                   </g>
                 );
               })}
+            </svg>
+          </div>
+        )}
+        {/* Magnifier. Half a foot per pixel is the whole reason this beats a
+            GPS fix, and a fingertip covers about 44px of it — so the corner
+            being placed is exactly what the hand is hiding. Parked in whichever
+            top corner the finger is not near. */}
+        {loupe && view && (
+          <div
+            className="absolute rounded-full border-2 border-white shadow-lg overflow-hidden pointer-events-none"
+            style={{
+              width: LOUPE_SIZE_PX,
+              height: LOUPE_SIZE_PX,
+              top: 8,
+              left: loupe.screenX < LOUPE_SIZE_PX + 24 ? undefined : 8,
+              right: loupe.screenX < LOUPE_SIZE_PX + 24 ? 8 : undefined,
+              backgroundImage: `url(${view.image})`,
+              backgroundRepeat: 'no-repeat',
+              backgroundSize: `${view.widthPx * loupe.mag}px ${view.heightPx * loupe.mag}px`,
+              backgroundPosition: `${LOUPE_SIZE_PX / 2 - loupe.imgX * loupe.mag}px ${
+                LOUPE_SIZE_PX / 2 - loupe.imgY * loupe.mag
+              }px`,
+            }}
+          >
+            <svg className="absolute inset-0" width={LOUPE_SIZE_PX} height={LOUPE_SIZE_PX}>
+              <line x1={LOUPE_SIZE_PX / 2} y1={0} x2={LOUPE_SIZE_PX / 2} y2={LOUPE_SIZE_PX}
+                stroke="rgba(255,255,255,0.7)" strokeWidth={1} />
+              <line x1={0} y1={LOUPE_SIZE_PX / 2} x2={LOUPE_SIZE_PX} y2={LOUPE_SIZE_PX / 2}
+                stroke="rgba(255,255,255,0.7)" strokeWidth={1} />
+              <circle cx={LOUPE_SIZE_PX / 2} cy={LOUPE_SIZE_PX / 2} r={5}
+                fill="none" stroke="#22d3ee" strokeWidth={2} />
             </svg>
           </div>
         )}

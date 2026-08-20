@@ -242,6 +242,93 @@ export function deriveRectangle(p1: LatLng, p2: LatLng, p3?: LatLng | null): Der
 }
 
 /**
+ * Snap a width point onto the perpendicular through the origin.
+ *
+ * deriveRectangle only ever uses the perpendicular component of the third
+ * corner — the along-axis part is reported as skew and then discarded — so this
+ * throws away nothing the grid depends on. What it buys is that the shape drawn
+ * on screen is the shape that gets walked: without it, three points tapped
+ * slightly out of square draw a parallelogram while the grid is laid out on a
+ * rectangle, and nothing on screen says so.
+ */
+export function projectWidthPoint(p1: LatLng, p2: LatLng, p3: LatLng): LatLng {
+  const d = displacementM(p1, p2);
+  const len = Math.hypot(d.east, d.north);
+  if (len === 0) return p3;
+  const along = { east: d.east / len, north: d.north / len };
+  const perpRight = { east: along.north, north: -along.east };
+
+  const v = displacementM(p1, p3);
+  const cross = v.east * perpRight.east + v.north * perpRight.north;
+  return offsetLatLng(p1, perpRight.east * cross, perpRight.north * cross);
+}
+
+/**
+ * How far the width point sits off the origin-axis line, signed, in metres.
+ * Positive is the right-hand side looking from origin towards axis.
+ */
+export function signedWidthM(p1: LatLng, p2: LatLng, p3: LatLng): number | null {
+  const d = displacementM(p1, p2);
+  const len = Math.hypot(d.east, d.north);
+  if (len === 0) return null;
+  const perpRight = { east: d.north / len, north: -d.east / len };
+  const v = displacementM(p1, p3);
+  return v.east * perpRight.east + v.north * perpRight.north;
+}
+
+/**
+ * Rebuild the width point from a width, so it stays on the rectangle's corner
+ * while the other two corners are dragged.
+ *
+ * Rotating the long side moves the perpendicular out from under a width point
+ * placed against the old one, leaving the handle floating off the shape it is
+ * supposed to control. Re-deriving it keeps all three handles on the rectangle
+ * and keeps the width unchanged, which is what someone dragging the *other* end
+ * of the lot expects to happen.
+ */
+export function widthPointFrom(p1: LatLng, p2: LatLng, widthM: number): LatLng | null {
+  const d = displacementM(p1, p2);
+  const len = Math.hypot(d.east, d.north);
+  if (len === 0) return null;
+  const perpRight = { east: d.north / len, north: -d.east / len };
+  return offsetLatLng(p1, perpRight.east * widthM, perpRight.north * widthM);
+}
+
+/**
+ * The four corners of the rectangle the grid is actually built on, from the
+ * three corners an assessor picks. Null until there are enough to define one.
+ *
+ * Distinct from lotCorners(), which works from a saved survey's stored
+ * dimensions; this one runs on raw picked points, so the picker can draw the
+ * true shape while a finger is still moving.
+ */
+export function rectangleCorners(
+  p1: LatLng,
+  p2: LatLng,
+  p3: LatLng | null | undefined,
+): LatLng[] | null {
+  if (!p3) return null;
+  const d = displacementM(p1, p2);
+  const len = Math.hypot(d.east, d.north);
+  if (len === 0) return null;
+  const along = { east: d.east / len, north: d.north / len };
+  const perpRight = { east: along.north, north: -along.east };
+
+  const v = displacementM(p1, p3);
+  const cross = v.east * perpRight.east + v.north * perpRight.north;
+  const acrossE = perpRight.east * cross;
+  const acrossN = perpRight.north * cross;
+
+  const c2 = offsetLatLng(p1, d.east, d.north);
+  return [
+    p1,
+    c2,
+    offsetLatLng(c2, acrossE, acrossN),
+    offsetLatLng(p1, acrossE, acrossN),
+  ];
+}
+
+/**
  * Unit vectors for the grid's own axes, in local east/north metres.
  * `along` runs from the start corner down the length; `across` is perpendicular,
  * on whichever side the lot sits (grid_flipped picks the other one).

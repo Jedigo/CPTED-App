@@ -378,6 +378,49 @@ export interface Viewport {
  * zooming move and resize this window over pixels already held, and the county
  * server is only consulted when the window runs out of margin or gets soft.
  */
+/** A gesture still held on screen while its replacement is fetched. */
+export interface HeldGesture {
+  pan?: { x: number; y: number } | null;
+  zoom?: { scale: number; originX: number; originY: number } | null;
+}
+
+/**
+ * A point on the container -> the fetched image's own pixel grid.
+ *
+ * Pure, and extracted from the picker deliberately: this conversion decides
+ * where a tapped or dragged corner actually lands, at roughly half a foot per
+ * pixel, and getting it wrong is invisible — the picture looks fine and the
+ * corner is simply somewhere else. That is exactly what happened in v0.35.1,
+ * where a tap during a held gesture could land hundreds of feet out.
+ *
+ * The held-gesture compensation is the subtle half: while a pan or pinch waits
+ * for its sharper replacement, the picture on screen is offset or scaled away
+ * from where the coordinate maths puts it, so the finger position has to be
+ * mapped back through that transform before anything else.
+ */
+export function screenToImagePx(
+  cx: number,
+  cy: number,
+  rectW: number,
+  rectH: number,
+  viewport: Viewport,
+  held: HeldGesture = {},
+): { x: number; y: number } {
+  let x = cx;
+  let y = cy;
+  if (held.zoom) {
+    x = held.zoom.originX + (x - held.zoom.originX) / held.zoom.scale;
+    y = held.zoom.originY + (y - held.zoom.originY) / held.zoom.scale;
+  } else if (held.pan) {
+    x -= held.pan.x;
+    y -= held.pan.y;
+  }
+  return {
+    x: viewport.x + (x / rectW) * viewport.w,
+    y: viewport.y + (y / rectH) * viewport.h,
+  };
+}
+
 export function viewportFor(view: AerialView, centre: LatLng, spanFt: number): Viewport {
   let w = spanFt / feetPerPixel(view);
   let h = (w * VIEW_H) / VIEW_W;
