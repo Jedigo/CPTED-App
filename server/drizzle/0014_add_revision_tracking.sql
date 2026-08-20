@@ -1,0 +1,32 @@
+-- Which iPad last changed an assessment, and how many changes ago.
+--
+-- The iPads are shared and sync is last-write-wins, so a device that pulls has
+-- no way to tell whether the server's copy is the work it pushed this morning
+-- or a colleague's work from this afternoon. updated_at cannot answer that: the
+-- sync handler overwrites it with the server clock on every push, so it means
+-- "last synced", not "last edited". These three columns are the answer.
+--
+-- revision is the device's own change counter, starting at 1 and incrementing
+-- on every real edit. The device keeps a second, client-only number for the
+-- revision it last saw here; newer / older / diverged falls straight out of
+-- comparing the two. NOT NULL DEFAULT 1 rather than nullable like the other
+-- columns added since 0003: it is arithmetic, and NULL + 1 is NULL. Every
+-- assessment recorded before this column existed reads 1, which is also what an
+-- upgrading device assigns its own copy of those same assessments.
+--
+-- last_edited_by is text, not varchar(n). It is a device name typed by a
+-- person, with no natural bound, and it arrives inside the assessment upsert
+-- transaction — a "value too long for character varying" would abort the whole
+-- sync, and the assessor's actual work would never land, all to protect a label
+-- that is only ever displayed. NULL means "an unidentified device": either the
+-- row predates this column, or a PWA too old to name itself pushed it.
+--
+-- last_edited_at is timestamptz, unlike report_signed_on and the light-survey
+-- dates, which are text. Those are date-only strings, and a date-only value
+-- through a timestamp column round-trips as UTC midnight and renders as the
+-- previous day in Eastern. This one is a true instant carrying its own offset,
+-- so that footgun does not apply and a real timestamp is worth having: it
+-- compares, sorts, and serialises back out as an unambiguous UTC ISO string.
+ALTER TABLE "assessments" ADD COLUMN IF NOT EXISTS "revision" integer DEFAULT 1 NOT NULL;--> statement-breakpoint
+ALTER TABLE "assessments" ADD COLUMN IF NOT EXISTS "last_edited_by" text;--> statement-breakpoint
+ALTER TABLE "assessments" ADD COLUMN IF NOT EXISTS "last_edited_at" timestamp with time zone;

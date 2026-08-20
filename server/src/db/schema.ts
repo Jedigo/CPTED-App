@@ -45,6 +45,31 @@ export const assessments = pgTable('assessments', {
   // JSON blob rather than a dozen columns: it is a single approved page that
   // moves as a unit, and jsonb is already how recommendations are stored.
   school_profile: jsonb('school_profile'),
+  // The device's own change counter for this assessment: 1 at creation, +1 on
+  // every real edit made on that device. The iPads are shared, so a device
+  // compares this against the revision it last saw here to tell whether its
+  // copy is newer, older, or diverged. Never compared against updated_at, which
+  // the sync handler overwrites with the server clock and which therefore means
+  // "last synced", not "last edited".
+  //
+  // NOT NULL with a default of 1, unlike the other columns added since 0003: it
+  // is arithmetic (the server increments it itself for clients too old to send
+  // one), and NULL + 1 is NULL.
+  revision: integer('revision').notNull().default(1),
+  // Device name as the device reported it. text rather than varchar(n): a
+  // person types it, it has no natural length, and a value-too-long error would
+  // roll back the whole sync transaction — losing an assessor's real work to
+  // protect a label that is only ever displayed. NULL means the editing device
+  // did not identify itself.
+  last_edited_by: text('last_edited_by'),
+  // When the content was actually changed on the device, straight through from
+  // the client — deliberately NOT the sync time, which updated_at and synced_at
+  // already record twice over.
+  //
+  // A real timestamptz, unlike report_signed_on above and the light-survey
+  // dates: this is a full instant with an offset, not a date-only string, so it
+  // does not hit the UTC-midnight-renders-as-yesterday footgun.
+  last_edited_at: timestamp('last_edited_at', { withTimezone: true }),
   synced_at: timestamp('synced_at', { withTimezone: true }),
 });
 

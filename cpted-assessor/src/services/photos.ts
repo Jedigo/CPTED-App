@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/database';
+import { touchAssessment, touchAssessmentForItem } from './touch';
 import type { Photo } from '../types';
 
 /**
@@ -151,7 +152,9 @@ export async function savePhoto(
     synced: false,
   };
 
-  await db.transaction('rw', db.photos, db.item_scores, async () => {
+  // db.assessments joins the scope so touchAssessment can run inside — Dexie
+  // rejects a nested transaction touching a table the outer scope omits.
+  await db.transaction('rw', db.photos, db.item_scores, db.assessments, async () => {
     await db.photos.add(photo);
 
     const itemScore = await db.item_scores.get(itemScoreId);
@@ -160,6 +163,8 @@ export async function savePhoto(
         photo_ids: [...itemScore.photo_ids, photoId],
       });
     }
+
+    await touchAssessment(assessmentId);
   });
 
   return photoId;
@@ -172,7 +177,7 @@ export async function deletePhoto(
   photoId: string,
   itemScoreId: string,
 ): Promise<void> {
-  await db.transaction('rw', db.photos, db.item_scores, async () => {
+  await db.transaction('rw', db.photos, db.item_scores, db.assessments, async () => {
     await db.photos.delete(photoId);
 
     const itemScore = await db.item_scores.get(itemScoreId);
@@ -181,6 +186,8 @@ export async function deletePhoto(
         photo_ids: itemScore.photo_ids.filter((id) => id !== photoId),
       });
     }
+
+    await touchAssessmentForItem(itemScoreId);
   });
 }
 
@@ -196,7 +203,7 @@ export async function movePhoto(
 ): Promise<void> {
   if (fromItemScoreId === toItemScoreId) return;
 
-  await db.transaction('rw', db.photos, db.item_scores, async () => {
+  await db.transaction('rw', db.photos, db.item_scores, db.assessments, async () => {
     await db.photos.update(photoId, {
       item_score_id: toItemScoreId,
       zone_key: toZoneKey,
@@ -216,5 +223,7 @@ export async function movePhoto(
         photo_ids: [...toItem.photo_ids, photoId],
       });
     }
+
+    await touchAssessmentForItem(toItemScoreId);
   });
 }

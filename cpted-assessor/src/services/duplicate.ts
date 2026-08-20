@@ -17,6 +17,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/database';
+import { getDeviceName } from './device';
 import { getZonesForType } from '../data/zone-registry';
 import { persistAllScores } from './scoring';
 import type { Assessment, ItemScore, Photo, PropertyType, ZoneScore } from '../types';
@@ -214,6 +215,13 @@ export async function duplicateAssessmentAs(
     quick_wins: [],
     assessor_signature: null,
     synced_at: null,
+    // A duplicate is a brand-new record, not a continuation of the source's
+    // history — so it starts at revision 1 with no common ancestor, alongside
+    // the synced_at: null above.
+    revision: 1,
+    synced_revision: null,
+    last_edited_by: getDeviceName(),
+    last_edited_at: now,
   };
 
   // Build zone_scores for target

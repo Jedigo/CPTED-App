@@ -10,6 +10,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/database';
+import { touchAssessment } from './touch';
 import type { CrimeReport } from '../types';
 
 /**
@@ -97,9 +98,16 @@ export async function saveCrimeReport(assessmentId: string, file: File): Promise
   };
 
   await db.crime_reports.add(report);
+  // The analyst PDF uploads through its own endpoint and is absent from the
+  // /api/sync payload, so without a parent bump a crime report attached on one
+  // iPad is invisible to divergence detection entirely.
+  await touchAssessment(assessmentId);
   return report;
 }
 
 export async function deleteCrimeReport(id: string): Promise<void> {
+  // Read the parent before the delete takes the only reference to it.
+  const report = await db.crime_reports.get(id);
   await db.crime_reports.delete(id);
+  if (report) await touchAssessment(report.assessment_id);
 }

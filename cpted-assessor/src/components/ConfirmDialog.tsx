@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react';
+import type { ReactNode } from 'react';
 
 interface ConfirmDialogProps {
   open: boolean;
   title: string;
-  message: string;
+  message: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: 'danger' | 'default';
@@ -62,14 +63,14 @@ export default function ConfirmDialog({
       />
 
       {/* Dialog */}
-      <div className="relative bg-surface rounded-2xl shadow-xl max-w-sm w-full p-6">
+      <div className="relative bg-surface rounded-2xl shadow-xl max-w-md w-full p-6">
         <h3
           id="confirm-title"
           className="text-lg font-bold text-ink mb-2"
         >
           {title}
         </h3>
-        <p className="text-sm text-ink/70 mb-6">{message}</p>
+        <div className="text-sm text-ink/70 mb-6 space-y-2">{message}</div>
 
         <div className="flex gap-3">
           <button

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { db } from '../db/database'
+import { touchAssessment } from '../services/touch'
 import { isWorshipType, isSchoolType, isCommercialType } from '../data/zone-registry'
 import type { Assessment, AssessmentType, TimeOfAssessment } from '../types'
 
@@ -73,7 +73,7 @@ export default function EditAssessmentInfo({ assessment, open, onClose }: Props)
 
     setSaving(true)
     try {
-      await db.assessments.update(assessment.id, {
+      await touchAssessment(assessment.id, {
         address: address.trim(),
         city: city.trim(),
         state: state.trim(),
@@ -92,7 +92,6 @@ export default function EditAssessmentInfo({ assessment, open, onClose }: Props)
         // its copy alone.
         report_signed_on: reportSignedOn || null,
         time_of_assessment: timeOfAssessment,
-        updated_at: new Date().toISOString(),
       })
       onClose()
     } catch (err) {

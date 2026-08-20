@@ -99,6 +99,13 @@
       "when": 1787000700000,
       "tag": "0013_add_crime_reports",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1787000800000,
+      "tag": "0014_add_revision_tracking",
+      "breakpoints": true
     }
   ]
 }

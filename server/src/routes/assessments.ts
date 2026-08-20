@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
 import {
@@ -223,7 +223,35 @@ router.put('/:id', async (req, res, next) => {
       }
     }
 
-    await db.update(assessments).set(updates).where(eq(assessments.id, req.params.id));
+    // This route changes content, so it must move the revision too. The PWA
+    // never calls it — it is the curl/admin path — and that is exactly why it
+    // matters: a writer that changes content without moving the revision
+    // reproduces the stale-counter bug permanently. Someone fixes an address by
+    // hand, every iPad keeps reading "same revision I last pulled", and nobody
+    // ever pulls the correction. Unlike an out-of-date iPad, there is no fleet
+    // upgrade that makes this one go away.
+    //
+    // Bumped in SQL rather than from the row read above, so two concurrent PUTs
+    // cannot both land on the same number.
+    //
+    // Only when the request actually carried something to change: a probe with
+    // an empty body must not inflate the counter and tell every iPad there is
+    // something new to pull. (updated_at is always present, hence > 1.)
+    const changedFields = Object.keys(updates).length > 1;
+    const changedScores = Boolean(req.body.zone_scores || req.body.item_scores);
+    if (changedFields || changedScores) {
+      updates.revision = sql`${assessments.revision} + 1`;
+      // Unlike the sync handler, the request IS the edit here, so the server
+      // clock is the honest edit time.
+      updates.last_edited_at = new Date();
+      updates.last_edited_by = (req.body.last_edited_by as string) ?? null;
+    }
+
+    const [updated] = await db
+      .update(assessments)
+      .set(updates)
+      .where(eq(assessments.id, req.params.id))
+      .returning({ revision: assessments.revision });
 
     // Update zone_scores if provided
     if (req.body.zone_scores) {
@@ -256,7 +284,7 @@ router.put('/:id', async (req, res, next) => {
       }
     }
 
-    res.json({ updated: true });
+    res.json({ updated: true, revision: updated?.revision ?? null });
   } catch (err) {
     next(err);
   }

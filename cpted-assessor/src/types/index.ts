@@ -115,6 +115,48 @@ export interface Assessment {
    */
   school_profile?: SchoolProfile | null
   synced_at: string | null
+
+  // --- Revision tracking -----------------------------------------------------
+  //
+  // Bookkeeping for the assessors, not for the homeowner — never printed on a
+  // report. If you ever want one of these in the PDF, put it there deliberately.
+  //
+  // The iPads are shared and sync is last-write-wins in both directions, so a
+  // device needs to know whether the server's copy is the work it pushed this
+  // morning or a colleague's from this afternoon. updated_at cannot answer
+  // that: it is bumped by syncing and was historically not bumped by score
+  // taps, notes, or photos at all.
+
+  /**
+   * This device's change counter for this assessment: 1 at creation, +1 on
+   * every real edit made here. Absent on records written before this field
+   * existed, which read as 1.
+   *
+   * The invariant the whole feature rests on: **revision names the exact bytes
+   * currently in this device's IndexedDB for this assessment.** So it is bumped
+   * in the same write as the change it describes, never by a derived
+   * recalculation, and never by sync.
+   */
+  revision?: number
+  /**
+   * The revision that was in the payload the server last accepted from this
+   * device — the common ancestor. Client-only; never sent to the server.
+   *
+   * This is what makes real conflict detection possible with two integers and
+   * no content hashing: if the local revision and the server's have both moved
+   * past this, the two copies changed independently.
+   *
+   * Null means this device has never completed a sync of this assessment, so
+   * there is no ancestor to diff against.
+   */
+  synced_revision?: number | null
+  /** Name of the device that made the last edit. Null = unidentified device. */
+  last_edited_by?: string | null
+  /**
+   * ISO instant of the last real edit — deliberately not the sync time, which
+   * synced_at already records.
+   */
+  last_edited_at?: string | null
 }
 
 export interface ZoneScore {

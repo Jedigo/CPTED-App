@@ -14,7 +14,7 @@
  * comes from.
  */
 
-import { db } from '../db/database';
+import { touchAssessment } from './touch';
 import type { Assessment, SchoolProfile } from '../types';
 
 export type SchoolProfileFieldKey = Exclude<keyof SchoolProfile, 'photo' | 'build_history'>;
@@ -104,8 +104,5 @@ export async function saveSchoolProfile(
   assessmentId: string,
   profile: SchoolProfile,
 ): Promise<void> {
-  await db.assessments.update(assessmentId, {
-    school_profile: profile,
-    updated_at: new Date().toISOString(),
-  });
+  await touchAssessment(assessmentId, { school_profile: profile });
 }

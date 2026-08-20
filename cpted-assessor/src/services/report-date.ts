@@ -8,6 +8,7 @@
  */
 
 import { db } from '../db/database';
+import { touchAssessment } from './touch';
 
 /**
  * Today as a date-only YYYY-MM-DD string, in the device's own timezone.
@@ -38,9 +39,6 @@ export async function ensureReportSignedOn(assessmentId: string): Promise<string
   if (assessment.report_signed_on) return assessment.report_signed_on;
 
   const today = todayLocalISO();
-  await db.assessments.update(assessmentId, {
-    report_signed_on: today,
-    updated_at: new Date().toISOString(),
-  });
+  await touchAssessment(assessmentId, { report_signed_on: today });
   return today;
 }

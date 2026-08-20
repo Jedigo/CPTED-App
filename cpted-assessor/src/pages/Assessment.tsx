@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/database';
+import { touchAssessmentForItem } from '../services/touch';
 import { getZonesForType, isCommercialType, isSchoolType } from '../data/zone-registry';
 import { getItemPhase, isNightItem, type Phase } from '../data/item-phases';
 import type { ItemScore, SchoolRating } from '../types';
@@ -185,10 +186,23 @@ export default function Assessment() {
 
   const handleScoreChange = useCallback(
     async (itemId: string, score: number | SchoolRating | null, isNa: boolean) => {
+      // Re-tapping the score an item already has is not an edit. Without this
+      // guard, walking a finished assessment to re-read it would inflate the
+      // revision and manufacture a conflict against a colleague's copy.
+      const existing = await db.item_scores.get(itemId);
+      if (!existing) return;
+      const nextScore = isNa ? null : score;
+      if (existing.score === nextScore && existing.is_na === isNa) return;
+
       await db.item_scores.update(itemId, {
-        score: isNa ? null : score,
+        score: nextScore,
         is_na: isNa,
       });
+      // In the same await chain as the write it describes, deliberately not
+      // folded into the debounce below: a sync can land at any instant, and a
+      // payload carrying the new score under the old revision would break the
+      // one invariant this feature rests on.
+      await touchAssessmentForItem(itemId);
 
       // Debounced persistence of zone + overall scores. Look up the item's
       // own zone_key rather than relying on activeZoneKey — in Night mode
@@ -215,7 +229,14 @@ export default function Assessment() {
 
   const handleNotesChange = useCallback(
     async (itemId: string, notes: string) => {
+      // ChecklistItem fires this from onBlur, which happens on every tab-away
+      // whether the text changed or not — so without this guard, merely reading
+      // an assessment back would bump the revision.
+      const existing = await db.item_scores.get(itemId);
+      if (!existing || existing.notes === notes) return;
+
       await db.item_scores.update(itemId, { notes });
+      await touchAssessmentForItem(itemId);
     },
     [],
   );

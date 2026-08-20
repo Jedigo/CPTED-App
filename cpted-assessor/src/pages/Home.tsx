@@ -2,6 +2,11 @@ import { useState, useCallback, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/database';
+import { touchAssessment } from '../services/touch';
+import { compareRevisions, getSyncStateBadge, revisionLabel, editedByLabel } from '../services/revision';
+import type { SyncState } from '../services/revision';
+import { getDeviceName, setDeviceName } from '../services/device';
+import DeviceNameDialog from '../components/DeviceNameDialog';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { getScoreColor, getScoreLabel } from '../services/scoring';
 import { getPropertyTypeLabel } from '../data/zone-registry';
@@ -37,6 +42,98 @@ function formatDate(iso: string): string {
   }
 }
 
+interface PullCopyFacts {
+  /** This iPad's revision, e.g. "v7". */
+  here: string;
+  /** The server's revision. */
+  there: string;
+  /** Who last edited the server's copy. */
+  theirs: string;
+  /** The last revision the two agreed on, when one is recorded. */
+  base: string | null;
+}
+
+/**
+ * What the download dialog says, per verdict.
+ *
+ * Downloading is a wholesale overwrite of the local copy, so the wording has to
+ * name what is being destroyed. The old single message said an assessment
+ * "already exists on this device" — true in every case, and therefore no help
+ * in the one case that matters.
+ */
+function pullDialogCopy(
+  state: SyncState,
+  f: PullCopyFacts,
+): { title: string; body: React.ReactNode; confirmLabel: string; variant: 'danger' | 'default' } {
+  switch (state) {
+    case 'diverged':
+      return {
+        title: 'Both Copies Have Changed',
+        variant: 'danger',
+        confirmLabel: 'Replace my copy',
+        body: (
+          <>
+            <p>
+              This iPad and the server have both been edited
+              {f.base ? ` since they last matched at ${f.base}` : ' independently'}.
+            </p>
+            <p>
+              This iPad: {f.here}. Server: {f.there}, last edited by {f.theirs}.
+            </p>
+            <p className="font-semibold">
+              Downloading replaces everything on this iPad. Scores, notes, and photos added
+              here since the last sync will be lost and cannot be recovered. To keep this
+              iPad's work, cancel and sync it first.
+            </p>
+          </>
+        ),
+      };
+    case 'local-ahead':
+      return {
+        title: 'This iPad Is Newer',
+        variant: 'danger',
+        confirmLabel: 'Discard my changes',
+        body: (
+          <>
+            <p>
+              This iPad has changes the server has never seen ({f.here} here, {f.there} on the
+              server).
+            </p>
+            <p className="font-semibold">
+              Downloading throws those changes away. To keep them, cancel and sync this iPad
+              instead.
+            </p>
+          </>
+        ),
+      };
+    case 'server-ahead':
+      return {
+        title: 'Update Local Copy',
+        variant: 'default',
+        confirmLabel: 'Download',
+        body: (
+          <p>
+            {f.theirs} edited this on the server ({f.there}) after this iPad last synced
+            {f.base ? ` (${f.base})` : ''}. This iPad has no unsynced changes, so nothing here
+            will be lost.
+          </p>
+        ),
+      };
+    default:
+      return {
+        title: 'Already Up To Date',
+        variant: 'default',
+        confirmLabel: 'Download',
+        body: (
+          <p>
+            Both copies are at {f.there}. Downloading again just fetches the photos and data
+            afresh.
+          </p>
+        ),
+      };
+  }
+}
+
 export default function Home() {
   const navigate = useNavigate();
   const online = useOnlineStatus();
@@ -54,7 +151,16 @@ export default function Home() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [pullingId, setPullingId] = useState<string | null>(null);
   const [pullProgress, setPullProgress] = useState<PullProgress | null>(null);
-  const [overwriteTarget, setOverwriteTarget] = useState<string | null>(null);
+  const [overwriteTarget, setOverwriteTarget] = useState<{ id: string; state: SyncState } | null>(null);
+  // A third state beyond loading/error: have we actually heard back from the
+  // server at all? Offline or not-yet-fetched must show NO comparison badge.
+  // Rendering "not synced" because we never asked would be a lie on every card
+  // the moment an iPad drops off Wi-Fi.
+  const [serverLoaded, setServerLoaded] = useState(false);
+
+  // This iPad's name, so an edit can say who made it.
+  const [deviceName, setDeviceNameState] = useState<string | null>(() => getDeviceName());
+  const [namingDevice, setNamingDevice] = useState(false);
 
   const assessments = useLiveQuery(
     () => db.assessments.orderBy('created_at').reverse().toArray(),
@@ -82,17 +188,11 @@ export default function Home() {
   });
 
   const handleMarkComplete = useCallback(async (assessmentId: string) => {
-    await db.assessments.update(assessmentId, {
-      status: 'completed',
-      updated_at: new Date().toISOString(),
-    });
+    await touchAssessment(assessmentId, { status: 'completed' });
   }, []);
 
   const handleReopen = useCallback(async (assessmentId: string) => {
-    await db.assessments.update(assessmentId, {
-      status: 'in_progress',
-      updated_at: new Date().toISOString(),
-    });
+    await touchAssessment(assessmentId, { status: 'in_progress' });
   }, []);
 
   const handleDuplicate = useCallback(async () => {
@@ -152,6 +252,7 @@ export default function Home() {
     try {
       const list = await fetchServerAssessments();
       setServerAssessments(list);
+      setServerLoaded(true);
     } catch (err) {
       setServerError(err instanceof Error ? err.message : 'Failed to connect to server');
     } finally {
@@ -168,12 +269,48 @@ export default function Home() {
 
   // Check if a server assessment exists locally
   const localIds = new Set(assessments?.map((a) => a.id) || []);
+  const serverById = new Map(serverAssessments.map((s) => [s.id, s]));
+
+  /**
+   * How this device's copy stands against the server's — or null when we have
+   * not managed to ask, in which case no badge is shown at all.
+   */
+  const syncStateFor = (assessment: Assessment): SyncState | null => {
+    if (!serverLoaded) return null;
+    return compareRevisions(assessment, serverById.get(assessment.id) ?? null);
+  };
+
+  // Names already in use across the department, offered when naming this iPad.
+  const knownDeviceNames = Array.from(
+    new Set(
+      serverAssessments
+        .map((s) => s.last_edited_by)
+        .filter((n): n is string => Boolean(n && n.trim())),
+    ),
+  ).sort();
+
+  // Ask after the first edit — but on the home screen, not the moment it
+  // happens. An assessor holding a light meter in a dark car park should not
+  // get a naming prompt mid-tap, and the answer is just as useful when they
+  // surface. Evidence of an edit is an assessment carrying an edit stamp with
+  // nobody's name on it.
+  //
+  // Asked once per visit at most, and declining is fine: edits still record a
+  // revision, they just say "unnamed iPad". The header chip is always there.
+  const hasUnattributedEdit = (assessments ?? []).some(
+    (a) => a.last_edited_at && !a.last_edited_by,
+  );
+  useEffect(() => {
+    if (deviceName === null && hasUnattributedEdit) setNamingDevice(true);
+  }, [deviceName, hasUnattributedEdit]);
 
   const handlePull = useCallback(
     async (id: string) => {
-      // If assessment exists locally, confirm overwrite
-      if (localIds.has(id) && overwriteTarget !== id) {
-        setOverwriteTarget(id);
+      // If it exists locally, confirm — and say which copy is newer, which the
+      // old dialog could not, so "Replace" was a coin toss.
+      if (localIds.has(id) && overwriteTarget?.id !== id) {
+        const local = assessments?.find((a) => a.id === id) ?? null;
+        setOverwriteTarget({ id, state: compareRevisions(local, serverById.get(id) ?? null) });
         return;
       }
 
@@ -191,7 +328,8 @@ export default function Home() {
         setPullProgress(null);
       }
     },
-    [localIds, overwriteTarget],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [localIds, overwriteTarget, assessments, serverAssessments],
   );
 
   const statusBadge = (status: AssessmentStatus) => {
@@ -249,6 +387,14 @@ export default function Home() {
             />
             <span className="text-xs text-white/50">{online ? 'Online' : 'Offline'}</span>
           </div>
+          <button
+            type="button"
+            onClick={() => setNamingDevice(true)}
+            title="What this iPad is called. Recorded with every edit so a shared iPad's work can be told apart."
+            className="text-xs text-ink/50 hover:text-ink px-2.5 py-1.5 rounded-lg border border-ink/15 hover:bg-blue-pale transition-all"
+          >
+            {deviceName ?? 'Name this iPad'}
+          </button>
           <ThemeToggle />
           <Link
             to="/assessment/new"
@@ -350,6 +496,7 @@ export default function Home() {
                     key={sa.id}
                     assessment={sa}
                     isLocal={localIds.has(sa.id)}
+                    local={assessments?.find((a) => a.id === sa.id) ?? null}
                     pulling={pullingId === sa.id}
                     pullProgress={pullingId === sa.id ? pullProgress : null}
                     disabled={pullingId !== null && pullingId !== sa.id}
@@ -395,6 +542,25 @@ export default function Home() {
                           <span>{assessment.homeowner_name}</span>
                           <span>&middot;</span>
                           <span>{formatDate(assessment.date_of_assessment)}</span>
+                          {revisionLabel(assessment) && (
+                            <>
+                              <span>&middot;</span>
+                              <span
+                                title={
+                                  assessment.last_edited_at
+                                    ? `Last edited ${formatDate(assessment.last_edited_at)}`
+                                    : undefined
+                                }
+                              >
+                                {revisionLabel(assessment)}
+                                {editedByLabel(
+                                  assessment.last_edited_by,
+                                  assessment.last_edited_at,
+                                  formatDate,
+                                ) && ` · ${assessment.last_edited_by ?? 'unnamed iPad'}`}
+                              </span>
+                            </>
+                          )}
                           {assessment.synced_at && (
                             <>
                               <span>&middot;</span>
@@ -409,6 +575,19 @@ export default function Home() {
                       {/* Right: Score + Status */}
                       <div className="flex flex-col items-end gap-2 flex-shrink-0">
                         {statusBadge(assessment.status)}
+                        {(() => {
+                          const state = syncStateFor(assessment);
+                          const badge = state && getSyncStateBadge(state);
+                          if (!badge) return null;
+                          return (
+                            <span
+                              title={badge.hint}
+                              className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide ${badge.classes}`}
+                            >
+                              {badge.label}
+                            </span>
+                          );
+                        })()}
                         {assessment.overall_score !== null ? (
                           <div className="text-right">
                             <span
@@ -564,7 +743,20 @@ export default function Home() {
       </div>
 
       {/* Version indicator */}
-      <p className="text-center text-[10px] text-ink/50 mt-6">v0.41.2</p>
+      {namingDevice && (
+        <DeviceNameDialog
+          currentName={deviceName}
+          suggestions={knownDeviceNames}
+          onSave={(name) => {
+            setDeviceName(name);
+            setDeviceNameState(name);
+            setNamingDevice(false);
+          }}
+          onCancel={() => setNamingDevice(false)}
+        />
+      )}
+
+      <p className="text-center text-[10px] text-ink/50 mt-6">v0.42.0</p>
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog
@@ -581,16 +773,32 @@ export default function Home() {
         onCancel={() => setDeleteTarget(null)}
       />
 
-      {/* Overwrite Confirmation Dialog */}
-      <ConfirmDialog
-        open={overwriteTarget !== null}
-        title="Update Local Copy"
-        message="This assessment already exists on this device. Downloading will replace the local version with the server copy. Continue?"
-        confirmLabel="Replace"
-        variant="default"
-        onConfirm={() => overwriteTarget && handlePull(overwriteTarget)}
-        onCancel={() => setOverwriteTarget(null)}
-      />
+      {/* Overwrite Confirmation Dialog — states which copy is newer, and what
+          downloading costs. The old copy said only that a local version existed. */}
+      {overwriteTarget && (() => {
+        const local = assessments?.find((a) => a.id === overwriteTarget.id) ?? null;
+        const server = serverById.get(overwriteTarget.id) ?? null;
+        const here = revisionLabel(local) ?? 'an untracked version';
+        const there = revisionLabel(server) ?? 'an untracked version';
+        const theirs = server?.last_edited_by ?? 'Another iPad';
+        const copy = pullDialogCopy(overwriteTarget.state, {
+          here,
+          there,
+          theirs,
+          base: local?.synced_revision != null ? `v${local.synced_revision}` : null,
+        });
+        return (
+          <ConfirmDialog
+            open
+            title={copy.title}
+            message={copy.body}
+            confirmLabel={copy.confirmLabel}
+            variant={copy.variant}
+            onConfirm={() => handlePull(overwriteTarget.id)}
+            onCancel={() => setOverwriteTarget(null)}
+          />
+        );
+      })()}
 
       {/* Duplicate Confirmation Dialog */}
       <ConfirmDialog

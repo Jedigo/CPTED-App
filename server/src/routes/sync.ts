@@ -11,6 +11,19 @@ import {
 } from '../db/schema.js';
 import { calculateZoneAverage, isZoneComplete, calculateOverallScore } from '../services/scoring.js';
 
+/**
+ * Client-supplied instant -> Date, or null.
+ *
+ * A bad string must not reach the driver: new Date('nonsense') is an Invalid
+ * Date, which throws on the way into the query and would take the assessor's
+ * entire sync down with it — losing real work to a malformed label.
+ */
+function toInstant(value: unknown): Date | null {
+  if (typeof value !== 'string' || value === '') return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 const router = Router();
 
 // POST /api/sync — Accepts full assessment payload from the PWA
@@ -20,10 +33,10 @@ router.post('/sync', async (req, res, next) => {
     const assessmentId = payload.assessment.id as string;
     const now = new Date();
 
-    await db.transaction(async (tx) => {
+    const committed = await db.transaction(async (tx) => {
       // 1. Upsert assessment
       const [existing] = await tx
-        .select({ id: assessments.id })
+        .select({ id: assessments.id, revision: assessments.revision })
         .from(assessments)
         .where(eq(assessments.id, assessmentId));
 
@@ -65,8 +78,62 @@ router.post('/sync', async (req, res, next) => {
         ...('school_profile' in payload.assessment
           ? { school_profile: payload.assessment.school_profile ?? null }
           : {}),
+        // Revision, device name, and edit time: the three fields that let a
+        // shared iPad tell whether the server's copy is ahead of, behind, or
+        // divergent from its own. They are one fact in three columns and are
+        // never written apart.
+        //
+        // Key-presence guarded like report_signed_on and school_profile — but
+        // unlike those, the fallback is NOT "leave it alone". A PWA older than
+        // this feature sends no revision and still overwrites the content
+        // wholesale, so leaving the stored revision put would leave a stale
+        // number against changed content: every up-to-date device would read
+        // "same revision I last pulled" and never fetch the old iPad's work.
+        // Invisible lost work is the exact failure this feature exists to
+        // prevent, so the server counts that push itself.
+        //
+        // The cost is accepted knowingly: the PWA pushes whole assessments
+        // rather than diffs, so an old iPad re-syncing UNCHANGED content also
+        // bumps the counter and briefly tells everyone else the server is
+        // ahead. That resolves on the next pull and stops entirely once every
+        // iPad is on this build. Telling "changed" from "unchanged" would need
+        // a content hash of the whole payload — more machinery than three
+        // iPads justify.
+        //
+        // Stored exactly as sent, never max(existing, incoming): sync is
+        // unconditional last-write-wins, so a device pushing an older revision
+        // over a newer one has genuinely won, and clamping upward would leave
+        // the server claiming a revision whose content it does not hold.
+        ...('revision' in payload.assessment
+          ? {
+              revision: Number(payload.assessment.revision) || 1,
+              last_edited_by: (payload.assessment.last_edited_by as string) ?? null,
+              last_edited_at: toInstant(payload.assessment.last_edited_at),
+            }
+          : existing
+            ? {
+                // Pre-feature client, existing row. Something may have changed
+                // and we know nothing about who or when, so the attribution is
+                // cleared to its unidentified-device value rather than left
+                // pointing at whichever iPad edited last — which would now be
+                // a lie. last_edited_by === null is the flag that says so.
+                revision: existing.revision + 1,
+                last_edited_by: null,
+                last_edited_at: now,
+              }
+            : { revision: 1, last_edited_by: null, last_edited_at: now }),
         synced_at: now,
       };
+
+      // The fleet-upgrade progress bar: when this stops appearing in the
+      // container logs, every iPad is on a build that names itself.
+      if (!('revision' in payload.assessment)) {
+        console.warn(
+          `Sync ${assessmentId}: client sent no revision; server counted the push as ${
+            existing ? existing.revision + 1 : 1
+          }`,
+        );
+      }
 
       if (existing) {
         await tx
@@ -261,15 +328,36 @@ router.post('/sync', async (req, res, next) => {
       }
 
       const overall = calculateOverallScore(byZone);
-      await tx
+      // Deliberately does not touch revision. Bumping here would leave the
+      // server permanently one ahead of the device that just pushed, so every
+      // device would read "server is newer" straight after its own sync.
+      //
+      // Read the row back rather than reporting what we intended to write, so
+      // the reply cannot disagree with what actually committed.
+      const [row] = await tx
         .update(assessments)
         .set({ overall_score: overall, synced_at: now })
-        .where(eq(assessments.id, assessmentId));
+        .where(eq(assessments.id, assessmentId))
+        .returning({
+          revision: assessments.revision,
+          last_edited_by: assessments.last_edited_by,
+          last_edited_at: assessments.last_edited_at,
+          overall_score: assessments.overall_score,
+        });
+      return row;
     });
 
     res.json({
       success: true,
       synced_at: now.toISOString(),
+      // What the server now holds, so the device can record it as the revision
+      // it has seen without a second round trip — and so it learns the number
+      // in the case where the server counted the push itself. Purely additive:
+      // a PWA that predates this reads only synced_at and ignores the rest.
+      revision: committed?.revision ?? null,
+      last_edited_by: committed?.last_edited_by ?? null,
+      last_edited_at: committed?.last_edited_at?.toISOString() ?? null,
+      overall_score: committed?.overall_score ?? null,
     });
   } catch (err) {
     next(err);

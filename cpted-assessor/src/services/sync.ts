@@ -8,10 +8,37 @@ import type {
   LightSurvey,
   LightReading,
 } from '../types';
+import { compareRevisions } from './revision';
+import type { RemoteRevision, SyncState } from './revision';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
 // --- Pull (server → device) types ---
+
+export interface SyncOptions {
+  /** Push anyway, after the user has been shown what they are overwriting. */
+  force?: boolean;
+}
+
+/**
+ * The server's copy moved since this device last synced, so pushing would
+ * overwrite someone else's work. Carries the server's side of the story so the
+ * caller can name both copies in the warning rather than saying "something
+ * changed".
+ */
+export class DivergedError extends Error {
+  // Declared rather than written as constructor parameter properties, which
+  // this project's erasableSyntaxOnly setting rejects.
+  state: SyncState;
+  server: RemoteRevision;
+
+  constructor(state: SyncState, server: RemoteRevision) {
+    super('The server copy has changed since this device last synced');
+    this.name = 'DivergedError';
+    this.state = state;
+    this.server = server;
+  }
+}
 
 export interface ServerAssessmentSummary {
   id: string;
@@ -27,6 +54,11 @@ export interface ServerAssessmentSummary {
   created_at: string;
   updated_at: string;
   synced_at: string | null;
+  // Optional so a client built ahead of the server still compiles; a missing
+  // revision reads as 1.
+  revision?: number;
+  last_edited_by?: string | null;
+  last_edited_at?: string | null;
 }
 
 export interface PullProgress {
@@ -63,6 +95,7 @@ export interface SyncProgress {
 export async function syncAssessment(
   assessmentId: string,
   onProgress?: (progress: SyncProgress) => void,
+  options: SyncOptions = {},
 ): Promise<SyncResult> {
   // Gather all data from IndexedDB
   const [assessment, zoneScores, itemScores, photos, lightSurveys, lightReadings, crimeReports] =
@@ -77,6 +110,34 @@ export async function syncAssessment(
     ]);
 
   if (!assessment) throw new Error('Assessment not found');
+
+  // The revision this push actually carries — captured here, not read back at
+  // the end. If the assessor edits while the photos upload, the local revision
+  // climbs past this one and the next comparison correctly reads "newer here"
+  // instead of claiming the unsent edits reached the server.
+  const pushedRevision = assessment.revision ?? 1;
+
+  // Look at the server's copy before overwriting it. This fetch already existed
+  // further down to collect the photo ids; it is hoisted so the same response
+  // also answers "has someone else changed this since I last synced" — so the
+  // round-trip count is unchanged.
+  let serverAssessment: (RemoteRevision & { photos?: { id: string }[] }) | null = null;
+  try {
+    const existingRes = await fetch(`${API_BASE}/api/assessments/${assessmentId}`);
+    if (existingRes.ok) serverAssessment = await existingRes.json();
+  } catch {
+    // Offline or unreachable; the POST below will fail with its own message.
+  }
+
+  // Refuse to clobber silently. A push is a wholesale overwrite of the server
+  // row, so if the server has moved on since this device last synced, the
+  // caller has to say so explicitly.
+  if (!options.force && serverAssessment) {
+    const state = compareRevisions(assessment, serverAssessment);
+    if (state === 'diverged' || state === 'server-ahead') {
+      throw new DivergedError(state, serverAssessment);
+    }
+  }
 
   // 1. Sync metadata + scores
   const payload = {
@@ -111,18 +172,11 @@ export async function syncAssessment(
 
   // 2. Upload photos the server doesn't have yet. Keyed on the server's photo
   // list (not the local synced flag) so previously failed uploads still retry.
-  let serverPhotoIds = new Set<string>();
-  try {
-    const existingRes = await fetch(`${API_BASE}/api/assessments/${assessmentId}`);
-    if (existingRes.ok) {
-      const existing = await existingRes.json();
-      serverPhotoIds = new Set(
-        ((existing.photos ?? []) as { id: string }[]).map((p) => p.id),
-      );
-    }
-  } catch {
-    // If the check fails, fall back to uploading everything
-  }
+  // From the response fetched above, before the push. If that fetch failed the
+  // set stays empty and everything is re-uploaded, which is the old fallback.
+  const serverPhotoIds = new Set(
+    ((serverAssessment?.photos ?? []) as { id: string }[]).map((p) => p.id),
+  );
 
   let photosUploaded = 0;
   const uploadablePhotos = photos.filter(
@@ -168,12 +222,29 @@ export async function syncAssessment(
     }
   }
 
-  // 4. Update assessment synced_at in IndexedDB
+  // 4. Record what the server now holds.
+  //
+  // Deliberately does NOT set updated_at, revision, last_edited_by, or
+  // last_edited_at: syncing moves bytes, it does not change them, and the old
+  // code's updated_at bump here is exactly why a timestamp could never answer
+  // "which copy is newest".
+  //
+  // synced_revision takes the number the server reports back when it has one,
+  // falling back to the number we pushed — they differ only when the server
+  // counted the push itself on behalf of a client too old to send one.
+  //
+  // status is re-read rather than taken from the record captured before the
+  // upload: the assessor can hit Mark Complete while photos are still going up,
+  // and the old code would write the pre-upload status back over it.
   const syncedAt = syncData.synced_at;
-  await db.assessments.update(assessmentId, {
-    synced_at: syncedAt,
-    status: assessment.status === 'completed' ? 'synced' : assessment.status,
-    updated_at: new Date().toISOString(),
+  await db.transaction('rw', db.assessments, async () => {
+    const current = await db.assessments.get(assessmentId);
+    if (!current) return;
+    await db.assessments.update(assessmentId, {
+      synced_at: syncedAt,
+      synced_revision: typeof syncData.revision === 'number' ? syncData.revision : pushedRevision,
+      status: current.status === 'completed' ? 'synced' : current.status,
+    });
   });
 
   return {
@@ -305,12 +376,26 @@ export async function pullAssessment(
 
   await db.transaction('rw', pullTables, async () => {
     // Upsert the assessment
+    // A pull makes this device an exact copy of the server, so the server's
+    // revision becomes both the local revision AND the new common ancestor.
+    // Never the local revision + 1: a pull is not an edit by this device, and
+    // stamping it as one would leave the freshly-downloaded copy claiming to be
+    // ahead of the very server it came from.
+    //
+    // The ?? fallbacks cover a client running against a server that has not
+    // been upgraded yet: the pull yields revision 1 / ancestor 1, which reads
+    // as in sync and then bumps normally on the first local edit.
+    const serverRevision = assessmentData.revision ?? 1;
     const assessment: Assessment = {
       ...assessmentData,
       top_recommendations: assessmentData.top_recommendations || [],
       quick_wins: assessmentData.quick_wins || [],
       notes: assessmentData.notes || '',
       assessor_signature: assessmentData.assessor_signature || null,
+      revision: serverRevision,
+      synced_revision: serverRevision,
+      last_edited_by: assessmentData.last_edited_by ?? null,
+      last_edited_at: assessmentData.last_edited_at ?? null,
     };
     await db.assessments.put(assessment);
 

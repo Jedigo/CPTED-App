@@ -10,6 +10,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/database';
+import { touchAssessment } from './touch';
 import type { LightSurvey, LightReading, IlluminanceUnit } from '../types';
 import type { MeterReading } from './light-meter';
 import {
@@ -65,6 +66,10 @@ export function newLightSurvey(assessmentId: string, areaName: string): LightSur
 export async function createLightSurvey(assessmentId: string, areaName: string): Promise<string> {
   const survey = newLightSurvey(assessmentId, areaName);
   await db.light_surveys.add(survey);
+  // Light surveys ride the assessment's sync payload, so an edit to one is an
+  // edit to the assessment. Without this bump, a grid plotted at the desk on
+  // one iPad gets wiped by a push from another with no warning at all.
+  await touchAssessment(assessmentId);
   return survey.id;
 }
 
@@ -72,24 +77,34 @@ export async function updateLightSurvey(
   id: string,
   patch: Partial<Omit<LightSurvey, 'id' | 'assessment_id' | 'created_at'>>,
 ): Promise<void> {
-  await db.light_surveys.update(id, { ...patch, updated_at: new Date().toISOString() });
+  await db.transaction('rw', db.light_surveys, db.assessments, async () => {
+    const survey = await db.light_surveys.get(id);
+    if (!survey) return;
+    await db.light_surveys.update(id, { ...patch, updated_at: new Date().toISOString() });
+    await touchAssessment(survey.assessment_id);
+  });
 }
 
 export async function deleteLightSurvey(id: string): Promise<void> {
-  await db.transaction('rw', db.light_surveys, db.light_readings, async () => {
+  await db.transaction('rw', db.light_surveys, db.light_readings, db.assessments, async () => {
+    // Read the parent before the delete takes the only reference to it.
+    const survey = await db.light_surveys.get(id);
     await db.light_readings.where('survey_id').equals(id).delete();
     await db.light_surveys.delete(id);
+    if (survey) await touchAssessment(survey.assessment_id);
   });
 }
 
 export async function clearReadings(surveyId: string): Promise<void> {
-  await db.transaction('rw', db.light_surveys, db.light_readings, async () => {
+  await db.transaction('rw', db.light_surveys, db.light_readings, db.assessments, async () => {
+    const survey = await db.light_surveys.get(surveyId);
     await db.light_readings.where('survey_id').equals(surveyId).delete();
     await db.light_surveys.update(surveyId, {
       imported_filename: null,
       imported_at: null,
       updated_at: new Date().toISOString(),
     });
+    if (survey) await touchAssessment(survey.assessment_id);
   });
 }
 
@@ -130,7 +145,7 @@ export async function importMeterReadings(
     source: 'imported',
   }));
 
-  await db.transaction('rw', db.light_surveys, db.light_readings, async () => {
+  await db.transaction('rw', db.light_surveys, db.light_readings, db.assessments, async () => {
     await db.light_readings.where('survey_id').equals(survey.id).delete();
     if (records.length > 0) await db.light_readings.bulkAdd(records);
     await db.light_surveys.update(survey.id, {
@@ -139,6 +154,7 @@ export async function importMeterReadings(
       imported_at: now,
       updated_at: now,
     });
+    await touchAssessment(survey.assessment_id);
   });
 
   return { imported: records.length, reconciliation };

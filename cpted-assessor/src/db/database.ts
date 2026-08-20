@@ -40,6 +40,20 @@ export class CPTEDDatabase extends Dexie {
     this.version(3).stores({
       crime_reports: 'id, assessment_id',
     });
+
+    // No version 4 for revision tracking, and that is deliberate — do not add
+    // one out of habit if you extend this.
+    //
+    // IndexedDB object stores are schemaless: the .stores() string declares the
+    // primary key and the INDEXES, nothing else. The revision fields added to
+    // Assessment are never queried or sorted on (the list sorts by created_at),
+    // so they need no index and therefore no schema version.
+    //
+    // Existing rows are given a starting revision by backfillRevisions() in
+    // services/touch.ts, which runs as ordinary startup work. An .upgrade()
+    // callback would run inside a versionchange transaction, where a throw
+    // leaves db.open() rejecting — the app fails to launch, in the field, on a
+    // shared iPad, with no recovery. Not worth it for four un-indexed numbers.
   }
 }
 

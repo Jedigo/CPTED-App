@@ -1,9 +1,13 @@
 import { getScoreColor, getScoreLabel } from '../services/scoring';
+import { compareRevisions, getSyncStateBadge, revisionLabel, editedByLabel } from '../services/revision';
+import type { LocalRevision } from '../services/revision';
 import type { ServerAssessmentSummary, PullProgress } from '../services/sync';
 
 interface ServerAssessmentCardProps {
   assessment: ServerAssessmentSummary;
   isLocal: boolean;
+  /** This device's copy, when it has one, so the card can say which is newer. */
+  local?: LocalRevision | null;
   pulling: boolean;
   pullProgress: PullProgress | null;
   disabled: boolean;
@@ -31,11 +35,15 @@ function formatDate(iso: string): string {
 export default function ServerAssessmentCard({
   assessment,
   isLocal,
+  local,
   pulling,
   pullProgress,
   disabled,
   onPull,
 }: ServerAssessmentCardProps) {
+  // Only meaningful once we hold a local copy to compare against.
+  const state = isLocal ? compareRevisions(local, assessment) : null;
+  const badge = state ? getSyncStateBadge(state) : null;
   const progressPct =
     pullProgress && pullProgress.total > 0
       ? Math.round((pullProgress.current / pullProgress.total) * 100)
@@ -58,14 +66,23 @@ export default function ServerAssessmentCard({
               <span>&middot;</span>
               <span>{formatDate(assessment.date_of_assessment || assessment.created_at)}</span>
             </div>
+            {revisionLabel(assessment) && (
+              <p className="text-xs text-ink/40 mt-1">
+                Server copy: {revisionLabel(assessment)}
+                {editedByLabel(assessment.last_edited_by, assessment.last_edited_at, formatDate) &&
+                  ` · ${editedByLabel(assessment.last_edited_by, assessment.last_edited_at, formatDate)}`}
+              </p>
+            )}
           </div>
 
           {/* Right: Score */}
           <div className="flex flex-col items-end gap-2 flex-shrink-0">
-            {isLocal && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-green-100 text-green-700">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                Downloaded
+            {isLocal && badge && (
+              <span
+                title={badge.hint}
+                className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${badge.classes}`}
+              >
+                {badge.label}
               </span>
             )}
             {assessment.overall_score !== null ? (
@@ -118,9 +135,11 @@ export default function ServerAssessmentCard({
               ? 'bg-blue-50 text-blue-400 cursor-wait'
               : disabled
                 ? 'bg-ink/5 text-ink/25 cursor-not-allowed'
-                : isLocal
-                  ? 'text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 active:scale-95'
-                  : 'text-white bg-navy hover:bg-navy-light active:scale-95'
+                : state === 'diverged' || state === 'local-ahead'
+                  ? 'text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 active:scale-95'
+                  : isLocal
+                    ? 'text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 active:scale-95'
+                    : 'text-white bg-navy hover:bg-navy-light active:scale-95'
           }`}
           aria-label={
             isLocal
@@ -133,10 +152,14 @@ export default function ServerAssessmentCard({
               <span className="w-3.5 h-3.5 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
               Downloading...
             </span>
-          ) : isLocal ? (
+          ) : !isLocal ? (
+            'Download'
+          ) : state === 'diverged' || state === 'local-ahead' ? (
+            'Replace'
+          ) : state === 'server-ahead' ? (
             'Update'
           ) : (
-            'Download'
+            'Re-download'
           )}
         </button>
       </div>

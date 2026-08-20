@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { v4 as uuidv4 } from 'uuid'
+import { getDeviceName } from '../services/device'
 import { db } from '../db/database'
 import { getZonesForType, isWorshipType, isSchoolType, isCommercialType } from '../data/zone-registry'
 import HeaderBackButton from '../components/HeaderBackButton'
@@ -89,6 +90,12 @@ export default function NewAssessment() {
         notes: '',
         assessor_signature: null,
         synced_at: null,
+        // A brand-new record: revision 1, and no common ancestor with the
+        // server because it has never been there.
+        revision: 1,
+        synced_revision: null,
+        last_edited_by: getDeviceName(),
+        last_edited_at: now,
       }
 
       const zones = getZonesForType(propertyType)

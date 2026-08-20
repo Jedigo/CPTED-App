@@ -180,6 +180,14 @@ export async function persistOverallScore(
       ? averages.reduce((sum, a) => sum + a, 0) / averages.length
       : null;
 
+  // Deliberately does NOT bump the revision, and must not be "fixed" to.
+  //
+  // This is a derived value — a pure function of item_scores, which already
+  // bumped when they changed. More importantly, persistAllScores() runs on
+  // mount from both Assessment and Summary as a migration safeguard, so a bump
+  // here would mean that merely OPENING an assessment made this iPad look
+  // edited, and the next comparison against a colleague's copy would cry
+  // conflict when nobody touched anything.
   await db.assessments.update(assessmentId, { overall_score: overall });
 }
 

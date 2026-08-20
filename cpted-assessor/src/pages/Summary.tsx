@@ -12,8 +12,11 @@ import {
 } from '../services/scoring';
 import { generatePDF } from '../services/pdf';
 import { todayLocalISO } from '../services/report-date';
+import { touchAssessment } from '../services/touch';
 import { generateRecommendations, generateQuickWins, generateFenceRecommendation } from '../services/recommendations';
-import { syncAssessment, checkServerHealth } from '../services/sync';
+import { syncAssessment, checkServerHealth, DivergedError } from '../services/sync';
+import { revisionLabel } from '../services/revision';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import HeaderBackButton from '../components/HeaderBackButton';
 import RecommendationEditor from '../components/RecommendationEditor';
@@ -89,11 +92,7 @@ export default function Summary() {
       if (!id) return;
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
-        db.assessments.update(id, {
-          top_recommendations: recs,
-          quick_wins: qw,
-          updated_at: new Date().toISOString(),
-        });
+        touchAssessment(id, { top_recommendations: recs, quick_wins: qw });
       }, 500);
     },
     [id],
@@ -149,6 +148,7 @@ export default function Summary() {
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [pushConflict, setPushConflict] = useState<DivergedError | null>(null);
   const [syncSuccess, setSyncSuccess] = useState<string | null>(null);
   const [serverReachable, setServerReachable] = useState<boolean | null>(null);
 
@@ -157,18 +157,26 @@ export default function Summary() {
     checkServerHealth().then(setServerReachable);
   }, []);
 
-  async function handleSync() {
+  async function handleSync(force = false) {
+    setPushConflict(null);
     if (!id) return;
     setSyncing(true);
     setSyncError(null);
     setSyncSuccess(null);
     try {
-      const result = await syncAssessment(id, setSyncProgress);
+      const result = await syncAssessment(id, setSyncProgress, { force });
       setSyncSuccess(
         `Synced successfully${result.photosUploaded > 0 ? ` (${result.photosUploaded} photos uploaded)` : ''}`
       );
     } catch (err) {
-      setSyncError(err instanceof Error ? err.message : 'Sync failed');
+      // A push is a wholesale overwrite of the server row, so when the server
+      // has moved on since this device last synced, say whose work is at stake
+      // instead of quietly winning.
+      if (err instanceof DivergedError) {
+        setPushConflict(err);
+      } else {
+        setSyncError(err instanceof Error ? err.message : 'Sync failed');
+      }
     } finally {
       setSyncing(false);
       setSyncProgress(null);
@@ -190,9 +198,8 @@ export default function Summary() {
 
   async function handleMarkComplete() {
     if (!id) return;
-    await db.assessments.update(id, {
+    await touchAssessment(id, {
       status: 'completed',
-      updated_at: new Date().toISOString(),
       // Completing the report is the moment it gets signed, so stamp the date
       // now for the assessor who finishes today and prints next week. Never
       // overwritten — reopening and re-completing keeps the original date, and
@@ -203,10 +210,7 @@ export default function Summary() {
 
   async function handleReopen() {
     if (!id) return;
-    await db.assessments.update(id, {
-      status: 'in_progress',
-      updated_at: new Date().toISOString(),
-    });
+    await touchAssessment(id, { status: 'in_progress' });
   }
 
   // Loading state
@@ -498,10 +502,7 @@ export default function Summary() {
               value={assessment.assessor_signature}
               onChange={(sig) => {
                 if (!id) return;
-                db.assessments.update(id, {
-                  assessor_signature: sig,
-                  updated_at: new Date().toISOString(),
-                });
+                touchAssessment(id, { assessor_signature: sig });
               }}
             />
           </div>
@@ -573,11 +574,19 @@ export default function Summary() {
                   ? `Last synced: ${new Date(assessment.synced_at).toLocaleString()}`
                   : 'Not yet synced to server'}
               </p>
+              {revisionLabel(assessment) && (
+                <p className="text-xs text-ink/40 mt-0.5">
+                  This iPad: {revisionLabel(assessment)}
+                  {assessment.synced_revision != null
+                    ? ` · server last had v${assessment.synced_revision}`
+                    : ' · never synced'}
+                </p>
+              )}
             </div>
             <button
               type="button"
               disabled={syncing}
-              onClick={handleSync}
+              onClick={() => handleSync()}
               className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all flex-shrink-0 ${
                 syncing
                   ? 'bg-blue-medium/60 text-white cursor-wait'
@@ -595,6 +604,44 @@ export default function Summary() {
           </div>
         )}
       </div>
+
+      {/* The push side of the same warning the Server tab gives on download.
+          Without it, syncing from a stale iPad silently overwrote whoever had
+          worked on the assessment in the meantime. */}
+      <ConfirmDialog
+        open={pushConflict !== null}
+        title="Server Copy Has Changed"
+        variant="danger"
+        confirmLabel="Overwrite server"
+        cancelLabel="Cancel"
+        message={
+          <>
+            <p>
+              {pushConflict?.server.last_edited_by ?? 'Another iPad'} edited this on the server
+              {revisionLabel(pushConflict?.server ?? null)
+                ? ` (${revisionLabel(pushConflict?.server ?? null)})`
+                : ''}{' '}
+              after this iPad last synced
+              {assessment?.synced_revision != null ? ` (v${assessment.synced_revision})` : ''}.
+            </p>
+            <p>
+              {pushConflict?.state === 'diverged'
+                ? `This iPad has its own changes since then${
+                    assessment?.revision != null ? ` (v${assessment.revision})` : ''
+                  }.`
+                : 'This iPad has no changes of its own since then, so downloading their copy is probably what you want.'}
+            </p>
+            <p className="font-semibold">
+              Syncing now replaces the server's copy with this one, and their work will be lost.
+            </p>
+          </>
+        }
+        onConfirm={() => {
+          setPushConflict(null);
+          handleSync(true);
+        }}
+        onCancel={() => setPushConflict(null)}
+      />
     </div>
   );
 }
