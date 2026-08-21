@@ -28,7 +28,8 @@ import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import ZoneSidebar, { type GroupedSection } from '../components/ZoneSidebar';
 import ZoneView from '../components/ZoneView';
 import NightView from '../components/NightView';
-import HeaderBackButton from '../components/HeaderBackButton';
+import HeaderBackButton from '../components/HeaderBackButton'
+import HeaderActions from '../components/HeaderActions';
 import ScoreReference from '../components/ScoreReference';
 import EditAssessmentInfo from '../components/EditAssessmentInfo';
 import ThemeToggle from '../components/ThemeToggle';
@@ -386,74 +387,59 @@ export default function Assessment() {
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-blue-pale">
       {/* Header */}
-      <header className="bg-navy text-white px-4 sm:px-6 py-3 flex items-center justify-between flex-shrink-0">
+      <header className="bg-navy text-white px-3 sm:px-6 py-3 flex items-center justify-between gap-2 flex-shrink-0">
         <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-          {/* Sidebar toggle (portrait only) */}
+          {/* Sidebar toggle (portrait only) — on a phone this is the only way to
+              reach another zone, so it never moves into the overflow menu. */}
           <button
             type="button"
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="lg:hidden px-2.5 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white active:scale-95 transition-all"
+            className="lg:hidden w-11 h-11 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white active:scale-95 transition-all flex-shrink-0"
             aria-label="Toggle zone sidebar"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <HeaderBackButton to="/" label="Home" className="hidden sm:inline-flex flex-shrink-0" />
-          <h1 className="text-base sm:text-lg font-bold truncate">
-            {assessment.address}
-          </h1>
+          <HeaderBackButton to="/" label="Home" iconOnlyOnPhone className="flex-shrink-0" />
+          <div className="min-w-0">
+            <h1 className="text-base sm:text-lg font-bold truncate">
+              {assessment.address}
+            </h1>
+            {/* The zone counter is on its own line at phone width rather than
+                dropped: knowing you are on 3 of 10 is most of the navigation. */}
+            <p className="sm:hidden text-[11px] text-white/50 leading-tight">
+              Zone {activeZoneIndex + 1}/{zones.length}
+              <span className={`inline-block w-1.5 h-1.5 rounded-full ml-2 align-middle ${online ? 'bg-green-400' : 'bg-red-400'}`} />
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
           <ThemeToggle />
-          <button
-            type="button"
-            onClick={() => setEditInfoOpen(true)}
-            className="px-3 py-1.5 rounded-lg border border-white/20 hover:bg-white/10 text-white/70 hover:text-white active:scale-95 transition-all text-xs font-medium flex-shrink-0"
-          >
-            Edit Info
-          </button>
-          {/* Score reference toggle */}
-          <button
-            type="button"
-            onClick={() => setScoreRefOpen(!scoreRefOpen)}
-            className="px-3 py-1.5 rounded-lg border border-white/20 hover:bg-white/10 text-white/70 hover:text-white active:scale-95 transition-all text-xs font-medium"
-            aria-label="Score reference"
-          >
-            Score Guide
-          </button>
-          {/* Online/Offline dot */}
+          {/* Online/Offline dot — the phone gets its own beside the zone
+              counter, where there is room for it. */}
           <span
-            className={`w-2 h-2 rounded-full flex-shrink-0 ${online ? 'bg-green-400' : 'bg-red-400'}`}
+            className={`hidden sm:inline-block w-2 h-2 rounded-full flex-shrink-0 ${online ? 'bg-green-400' : 'bg-red-400'}`}
             aria-label={online ? 'Online' : 'Offline'}
           />
           <span className="text-white/50 text-sm hidden sm:inline">
             Zone {activeZoneIndex + 1}/{zones.length}
           </span>
-          {/* School site profile — the roll/capacity/staffing page. Schools only,
-              like the light surveys beside it. */}
-          {ratingMode && (
-            <Link
-              to={`/assessment/${id}/school`}
-              className="px-4 py-2 bg-white/10 hover:bg-white/20 active:scale-95 rounded-lg text-sm font-medium transition-all"
-            >
-              School Info
-            </Link>
-          )}
-          {ratingMode && (
-            <Link
-              to={`/assessment/${id}/light`}
-              className="px-4 py-2 bg-white/10 hover:bg-white/20 active:scale-95 rounded-lg text-sm font-medium transition-all"
-            >
-              Light Survey
-            </Link>
-          )}
-          <Link
-            to={`/assessment/${id}/summary`}
-            className="px-4 py-2 bg-blue-medium hover:bg-blue-medium/80 active:scale-95 rounded-lg text-sm font-medium transition-all"
-          >
-            Summary
-          </Link>
+          <HeaderActions
+            actions={[
+              { label: 'Edit Info', onClick: () => setEditInfoOpen(true) },
+              { label: 'Score Guide', onClick: () => setScoreRefOpen(!scoreRefOpen) },
+              // School site profile and light surveys — schools only, like the
+              // rating mode they are gated on.
+              ...(ratingMode
+                ? [
+                    { label: 'School Info', to: `/assessment/${id}/school` },
+                    { label: 'Light Survey', to: `/assessment/${id}/light` },
+                  ]
+                : []),
+              { label: 'Summary', to: `/assessment/${id}/summary`, primary: true },
+            ]}
+          />
         </div>
       </header>
 
@@ -509,7 +495,7 @@ export default function Assessment() {
                       key={opt}
                       type="button"
                       onClick={() => handlePhaseChange(opt)}
-                      className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                      className={`px-4 sm:px-3 py-2.5 sm:py-1.5 text-xs font-semibold rounded-md transition-all ${
                         active
                           ? 'bg-navy text-white shadow-sm'
                           : 'text-ink/60 hover:text-ink hover:bg-ink/5'

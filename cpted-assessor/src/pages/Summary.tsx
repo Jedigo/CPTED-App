@@ -18,7 +18,8 @@ import { syncAssessment, checkServerHealth, DivergedError } from '../services/sy
 import { revisionLabel } from '../services/revision';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
-import HeaderBackButton from '../components/HeaderBackButton';
+import HeaderBackButton from '../components/HeaderBackButton'
+import HeaderActions from '../components/HeaderActions';
 import RecommendationEditor from '../components/RecommendationEditor';
 import SignaturePad from '../components/SignaturePad';
 import EditAssessmentInfo from '../components/EditAssessmentInfo';
@@ -271,39 +272,43 @@ export default function Summary() {
         <div className="flex items-center gap-2 sm:gap-4 min-w-0">
           <Link
             to="/"
-            className="inline-flex items-center justify-center w-9 h-9 rounded-lg text-white/80 hover:text-white bg-white/10 hover:bg-white/20 active:scale-95 transition-all flex-shrink-0"
+            className="inline-flex items-center justify-center w-11 h-11 sm:w-9 sm:h-9 rounded-lg text-white/80 hover:text-white bg-white/10 hover:bg-white/20 active:scale-95 transition-all flex-shrink-0"
             aria-label="Home"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z" />
             </svg>
           </Link>
-          <HeaderBackButton to={`/assessment/${id}`} label="Assessment" className="flex-shrink-0" />
+          {/* Phone drops the word and keeps the arrow — the same destination in
+              a third of the width, which is what leaves room for the address. */}
+          <HeaderBackButton
+            to={`/assessment/${id}`}
+            label="Assessment"
+            iconOnlyOnPhone
+            className="flex-shrink-0"
+          />
           <h1 className="text-base sm:text-lg font-bold truncate">
             {assessment.address}
           </h1>
         </div>
-        <div className="flex items-center gap-3 flex-shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
           <ThemeToggle />
-          <button
-            type="button"
-            onClick={() => setEditInfoOpen(true)}
-            className="px-3 py-1.5 rounded-lg border border-white/20 hover:bg-white/10 text-white/70 hover:text-white active:scale-95 transition-all text-xs font-medium flex-shrink-0"
-          >
-            Edit Info
-          </button>
+          <HeaderActions actions={[{ label: 'Edit Info', onClick: () => setEditInfoOpen(true) }]} />
           <span
             className={`w-2 h-2 rounded-full ${online ? 'bg-green-400' : 'bg-red-400'}`}
             aria-label={online ? 'Online' : 'Offline'}
           />
+          {/* The status pill is abbreviated rather than dropped on a phone —
+              whether an assessment is finished is the point of this screen. */}
           <span
-            className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${
+            className={`px-2 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-wide whitespace-nowrap ${
               isComplete
                 ? 'bg-green-400/20 text-green-300'
                 : 'bg-yellow-400/20 text-yellow-300'
             }`}
           >
-            {isComplete ? 'Completed' : 'In Progress'}
+            <span className="sm:hidden">{isComplete ? 'Done' : 'WIP'}</span>
+            <span className="hidden sm:inline">{isComplete ? 'Completed' : 'In Progress'}</span>
           </span>
         </div>
       </header>

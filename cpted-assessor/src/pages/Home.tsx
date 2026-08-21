@@ -19,7 +19,8 @@ import {
 import ConfirmDialog from '../components/ConfirmDialog';
 import DuplicateResultDialog from '../components/DuplicateResultDialog';
 import ServerAssessmentCard from '../components/ServerAssessmentCard';
-import ThemeToggle from '../components/ThemeToggle';
+import ThemeToggle from '../components/ThemeToggle'
+import HeaderActions from '../components/HeaderActions';
 import { duplicateAssessmentAs, type DuplicateResult } from '../services/duplicate';
 import type { Assessment, AssessmentStatus, PropertyType } from '../types';
 
@@ -372,36 +373,40 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-blue-pale">
       {/* Header */}
-      <header className="bg-navy text-white px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-bold">CPTED Assessor</h1>
+      <header className="bg-navy text-white px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-3 min-w-0">
+          <h1 className="text-lg sm:text-xl font-bold whitespace-nowrap">CPTED Assessor</h1>
           <span className="text-white/40 text-sm hidden sm:inline">
             Site Assessment Tool
           </span>
         </div>
-        <div className="flex items-center gap-4">
-          {/* Online/Offline indicator */}
+        <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+          {/* Online/Offline indicator. The word is dropped on a phone; the dot
+              carries the same meaning in a tenth of the width. */}
           <div className="flex items-center gap-2" aria-label={online ? 'Online' : 'Offline'}>
             <span
               className={`w-2 h-2 rounded-full ${online ? 'bg-green-400' : 'bg-red-400'}`}
             />
-            <span className="text-xs text-white/50">{online ? 'Online' : 'Offline'}</span>
+            <span className="text-xs text-white/50 hidden sm:inline">{online ? 'Online' : 'Offline'}</span>
           </div>
-          <button
-            type="button"
-            onClick={() => setNamingDevice(true)}
-            title="What this iPad is called. Recorded with every edit so a shared iPad's work can be told apart."
-            className="text-xs text-ink/50 hover:text-ink px-2.5 py-1.5 rounded-lg border border-ink/15 hover:bg-blue-pale transition-all"
-          >
-            {deviceName ?? 'Name this iPad'}
-          </button>
           <ThemeToggle />
-          <Link
-            to="/assessment/new"
-            className="bg-blue-medium hover:bg-blue-medium/80 active:scale-95 text-white font-semibold text-sm px-5 py-2.5 rounded-xl transition-all"
-          >
-            + New Assessment
-          </Link>
+          <HeaderActions
+            actions={[
+              {
+                // Was styled `text-ink/50` on a navy bar — dark text on dark
+                // navy in light mode, effectively invisible.
+                label: deviceName ?? 'Name this device',
+                onClick: () => setNamingDevice(true),
+              },
+              {
+                label: '+ New Assessment',
+                shortLabel: '+ New',
+                to: '/assessment/new',
+                primary: true,
+                keep: true,
+              },
+            ]}
+          />
         </div>
       </header>
 
@@ -429,7 +434,7 @@ export default function Home() {
                 type="button"
                 onClick={() => !isServerDisabled && setFilter(tab.key)}
                 disabled={isServerDisabled}
-                className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                className={`flex-1 px-2 sm:px-4 py-2.5 rounded-lg text-xs sm:text-sm font-semibold whitespace-nowrap transition-all ${
                   isServerDisabled
                     ? 'text-ink/20 cursor-not-allowed'
                     : filter === tab.key
@@ -756,7 +761,7 @@ export default function Home() {
         />
       )}
 
-      <p className="text-center text-[10px] text-ink/50 mt-6">v0.45.0</p>
+      <p className="text-center text-[10px] text-ink/50 mt-6">v0.46.0</p>
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog

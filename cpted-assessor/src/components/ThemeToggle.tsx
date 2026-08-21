@@ -1,5 +1,9 @@
 import { useTheme } from '../contexts/ThemeContext';
 
+/**
+ * 36px is a comfortable target on an iPad and a miss with a thumb on a phone,
+ * so the button grows to the 44px minimum below `sm` and is unchanged above it.
+ */
 export default function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
 
@@ -7,7 +11,7 @@ export default function ThemeToggle() {
     <button
       type="button"
       onClick={toggleTheme}
-      className="w-9 h-9 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white active:scale-95 transition-all"
+      className="w-11 h-11 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white active:scale-95 transition-all"
       aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
     >
       {theme === 'dark' ? (
