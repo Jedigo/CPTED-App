@@ -231,13 +231,6 @@ function EarthExport({
   );
 }
 
-/**
- * Above this, a captured corner is worse than the measurement it replaces.
- * 5 m is roughly 16 ft — about a tenth of a typical lot's short side, which is
- * the point at which the derived width starts visibly moving the grid.
- */
-const GPS_ACCURACY_LIMIT_M = 5;
-
 export default function LightSurveyDetail() {
   const { id, surveyId } = useParams<{ id: string; surveyId: string }>();
   const navigate = useNavigate();
@@ -274,8 +267,6 @@ export default function LightSurveyDetail() {
   const [kmlNoteFor, setKmlNoteFor] = useState<'plan' | 'report' | null>(null);
   const [aerialError, setAerialError] = useState<string | null>(null);
   const [aerialBusy, setAerialBusy] = useState(false);
-  const [locating, setLocating] = useState<'origin' | 'axis' | 'width' | null>(null);
-  const [gpsAccuracy, setGpsAccuracy] = useState<Record<string, number>>({});
   const [pickerOpen, setPickerOpen] = useState(true);
   const aerialView = useRef<AerialView | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -504,52 +495,6 @@ export default function LightSurveyDetail() {
     await persistCorners(o, a, w);
   }
 
-  function captureLocation(which: 'origin' | 'axis' | 'width') {
-    if (!navigator.geolocation) {
-      setGeoError('This device does not report a location to the browser.');
-      return;
-    }
-    setGeoError(null);
-    setLocating(which);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const here = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        const text = formatLatLng(here);
-        setLocating(null);
-
-        // Report the accuracy the device itself claims. A corner is only as good
-        // as this number, and a handheld fix is routinely 15-30 ft — on a lot
-        // 150 ft across that is a 10-20% error in the width, which then scales
-        // every derived grid position. Field testing confirmed it: the readout
-        // is what stops a bad corner from looking like a good one.
-        setGpsAccuracy((prev) => ({ ...prev, [which]: pos.coords.accuracy }));
-
-        // Build the full corner set here rather than reading it back out of the
-        // inputs, whose state has not updated yet at this point.
-        const current = {
-          origin: parseLatLng(originInput),
-          axis: parseLatLng(axisInput),
-          width: parseLatLng(widthPtInput),
-        };
-        if (which === 'origin') { setOriginInput(text); current.origin = here; }
-        else if (which === 'axis') { setAxisInput(text); current.axis = here; }
-        else { setWidthPtInput(text); current.width = here; }
-
-        persistCorners(current.origin, current.axis, current.width);
-      },
-      (err) => {
-        setLocating(null);
-        setGeoError(`Could not read this device's location. ${err.message}`);
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
-    );
-  }
-
-  /**
-   * Store a screenshot of the Google Earth view. Kept larger than a checklist
-   * photo: the whole point is reading point numbers and the shape of a dark
-   * region off the imagery, which 1920px does not survive.
-   */
   async function handleAerial(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !surveyId) return;
@@ -731,17 +676,49 @@ export default function LightSurveyDetail() {
             <p className="text-xs text-ink/60 mb-3">
               In Google Maps, right-click each corner and the coordinates copy to your
               clipboard. Paste them here and the length, width, and orientation are all
-              worked out — nothing to measure by hand. In the field, stand on the corner and
-              tap Use GPS instead.
+              worked out &mdash; nothing to measure by hand. About &plusmn;3 ft, so it is the
+              one to use when the lot is not on the county imagery: newly paved, or outside
+              the county.
+            </p>
+            <p className="text-xs text-ink/60 mb-3">
+              {/* Ranked by accuracy, not by how convenient each one is to reach.
+                  Sorting them the other way is how a lot ends up framed by the
+                  worst available method. */}
+              Least accurate last: <strong className="text-ink/80">the map above is about
+              &plusmn;6 in</strong>, pasted coordinates about &plusmn;3 ft, and pacing the lot
+              and typing the length and width above is a foot or two. There is deliberately no
+              &ldquo;use my location&rdquo; button here &mdash; see below.
             </p>
             <p className="text-xs text-ink/60 mb-3">
               The order shown is the shortest walk: the first two corners are next to each
               other, so the long side is walked once at the end. The fields don&rsquo;t care
-              which order they&rsquo;re filled in. Device GPS lands within 15&ndash;30 ft, which
-              on a short side this size is a real error &mdash; the map route is roughly ten
-              times more accurate, so use it when you can.
+              which order they&rsquo;re filled in.
             </p>
 
+            {/*
+              There were three "Use GPS" buttons here until v0.47.0, one per
+              corner, and they were removed rather than fixed.
+
+              They shipped in v0.31.0 when the only alternative was pasting from
+              Google Maps. The aerial picker in v0.33.0 beat them by roughly
+              twenty to one (about half a foot per pixel against 10-30 ft), and
+              v0.44.0 cached the imagery so it works with no signal — which was
+              GPS's last remaining argument. Even the awkward case, an unplanned
+              lot with no cached imagery, is better served by pacing it and
+              typing the length and width.
+
+              What made it worth removing rather than leaving: it was the
+              easiest control on the screen — one tap while standing there,
+              against framing a box — and its failure is invisible. You get a lot
+              of the wrong size, the grid lays out on it, the walk happens, and
+              every reading is attributed to the wrong ground. The v0.32.2
+              accuracy warning helped, but a warning people learn to tap through
+              fails on the one occasion it is right.
+
+              Photo geotagging keeps navigator.geolocation and its own 30 m gate.
+              GPS is fine for recording where you were and useless for measuring
+              how big something is.
+            */}
             <div className="space-y-2">
               {(
                 [
@@ -754,45 +731,27 @@ export default function LightSurveyDetail() {
                   <span className="block text-xs font-semibold uppercase tracking-wide text-ink/50 mb-1">
                     {label}
                   </span>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={value}
-                      onChange={(e) => setter(e.target.value)}
-                      onBlur={commitCoordinates}
-                      placeholder="29.211234, -81.023456"
-                      className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-ink/20 bg-surface text-ink placeholder:text-ink/40 text-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => captureLocation(which)}
-                      disabled={locating !== null}
-                      className="px-3 py-2 rounded-lg border border-ink/20 bg-surface text-ink text-xs font-semibold hover:bg-blue-light active:scale-95 transition-all disabled:opacity-50 whitespace-nowrap"
-                    >
-                      {locating === which ? 'Locating…' : 'Use GPS'}
-                    </button>
-                  </div>
-                  {gpsAccuracy[which] !== undefined && (
-                    <p
-                      className={`text-xs mt-1 ${
-                        gpsAccuracy[which] > GPS_ACCURACY_LIMIT_M
-                          ? 'text-score-deficient'
-                          : 'text-ink/50'
-                      }`}
-                    >
-                      GPS reported &plusmn;{Math.round(gpsAccuracy[which] * 3.28084)} ft
-                      {gpsAccuracy[which] > GPS_ACCURACY_LIMIT_M && (
-                        <>
-                          {' '}
-                          — too coarse for a corner. Right-click the corner in Google Maps
-                          instead (about &plusmn;3 ft); this fix would size the lot wrong.
-                        </>
-                      )}
-                    </p>
-                  )}
+                  <input
+                    type="text"
+                    value={value}
+                    onChange={(e) => setter(e.target.value)}
+                    onBlur={commitCoordinates}
+                    placeholder="29.211234, -81.023456"
+                    className="w-full px-3 py-2 rounded-lg border border-ink/20 bg-surface text-ink placeholder:text-ink/40 text-sm"
+                  />
                 </div>
               ))}
             </div>
+
+            <p className="text-xs text-ink/50 mt-3">
+              <strong className="text-ink/70">Why there is no &ldquo;use my location&rdquo;
+              button:</strong> a handheld fix is 10&ndash;30 ft even on a phone with real GPS.
+              On a lot 66 ft across that is a 15&ndash;45% error in the width, and it scales
+              into every grid point &mdash; the readings would be real and pinned to the wrong
+              ground, with nothing looking broken. Photos still record a location, because
+              saying which property you were at is a different job from measuring how big it
+              is.
+            </p>
 
             {geoError && (
               <p className="mt-3 text-sm text-score-critical bg-score-critical/10 border border-score-critical/30 rounded-lg p-3">
