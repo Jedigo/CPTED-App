@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/database';
-import { setWalkPosition } from '../services/light-survey';
+import { clearReading, enterReading, setWalkPosition } from '../services/light-survey';
 import { buildPointPlan, stepPoint, walkStep } from '../services/light-grid';
 import WalkMap from '../components/WalkMap';
+import ReadingKeypad from '../components/ReadingKeypad';
 
 /**
  * Walking a lighting grid, on the device doing the walk.
@@ -89,6 +90,32 @@ export default function LightWalk() {
    */
   const [moved, setMoved] = useState<number | null>(null);
 
+  /**
+   * Whether the keypad is up. Remembered per device rather than per survey:
+   * whether an assessor types readings or logs them to the meter's card is a
+   * habit, not a property of the lot. localStorage is the right home for it —
+   * it never needs to reach the server, and it must not count as an edit.
+   */
+  const [typing, setTyping] = useState(() => {
+    try {
+      return localStorage.getItem('cpted.walk.keypad') !== 'off';
+    } catch {
+      // Private browsing, or site data blocked. Default to showing it.
+      return true;
+    }
+  });
+
+  function toggleTyping() {
+    setTyping((on) => {
+      try {
+        localStorage.setItem('cpted.walk.keypad', on ? 'off' : 'on');
+      } catch {
+        // Nothing to do — the choice just won't survive a reload.
+      }
+      return !on;
+    });
+  }
+
   useWakeLock(!!survey);
 
   const plan = useMemo(
@@ -117,6 +144,18 @@ export default function LightWalk() {
   function goTo(point: number) {
     setMoved(point);
     if (surveyId) void setWalkPosition(surveyId, point);
+  }
+
+  /**
+   * Save the typed reading and step on. Advancing is part of recording: the
+   * assessor's next move is to walk to the next point, and making them tap
+   * twice for one reading is seventy extra taps over a lot.
+   */
+  function recordReading(valueFc: number) {
+    if (!surveyId || current === null || !plan) return;
+    void enterReading(surveyId, current, valueFc);
+    const onward = stepPoint(current, 1, plan);
+    if (onward !== null) goTo(onward);
   }
 
   function move(direction: 1 | -1) {
@@ -177,11 +216,31 @@ export default function LightWalk() {
                 whole file ends up shifted by a position. */}
             Reading {readingNumber} of {plan.expectedReadings}
             {plan.skipped.length > 0 && <> · grid point {current}</>}
+            {values.size > 0 && <> · {values.size} read</>}
           </p>
         </div>
+        <button
+          onClick={toggleTyping}
+          className="px-3 py-2 rounded-lg bg-white/10 text-sm font-semibold flex-shrink-0"
+        >
+          {typing ? 'Hide keypad' : 'Type readings'}
+        </button>
       </header>
 
-      <WalkMap survey={survey} current={current} values={values} onPickPoint={goTo} />
+      <div className="flex-1 flex flex-col landscape:flex-row min-h-0">
+        <WalkMap survey={survey} current={current} values={values} onPickPoint={goTo} />
+        {typing && (
+          <ReadingKeypad
+            pointIndex={current}
+            storedValue={values.get(current)}
+            isLastPoint={next === null}
+            onRecord={recordReading}
+            onClear={() => {
+              if (surveyId) void clearReading(surveyId, current);
+            }}
+          />
+        )}
+      </div>
 
       <div className="flex-shrink-0 bg-navy px-3 py-3 space-y-3">
         <p className="text-center text-sm text-white/85 min-h-[1.25rem]">{step.instruction}</p>

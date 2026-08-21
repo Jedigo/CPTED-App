@@ -756,7 +756,7 @@ export default function Home() {
         />
       )}
 
-      <p className="text-center text-[10px] text-ink/50 mt-6">v0.44.0</p>
+      <p className="text-center text-[10px] text-ink/50 mt-6">v0.45.0</p>
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog

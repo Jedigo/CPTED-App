@@ -30,6 +30,7 @@ import {
   updateLightSurvey,
   importMeterReadings,
   clearReadings,
+  countTypedReadings,
   hasGrid,
 } from '../services/light-survey';
 import {
@@ -403,6 +404,22 @@ export default function LightSurveyDetail() {
     setImportStatus(null);
 
     try {
+      // Importing replaces every reading the survey holds. Readings typed
+      // during the walk exist nowhere else — there is no card to re-import
+      // them from — so the count is named and the wipe is agreed to first.
+      const typed = await countTypedReadings(survey.id);
+      if (typed > 0) {
+        const ok = window.confirm(
+          `This lot holds ${typed} reading${typed === 1 ? '' : 's'} typed in during the walk. ` +
+            `Importing ${file.name} replaces all of them, and they are not stored anywhere else.\n\n` +
+            `Import anyway?`,
+        );
+        if (!ok) {
+          if (fileRef.current) fileRef.current.value = '';
+          return;
+        }
+      }
+
       const text = await file.text();
       const parsed = parseMeterFile(text);
       const result = await importMeterReadings(survey, parsed.readings, parsed.unit, file.name);
@@ -993,9 +1010,26 @@ export default function LightSurveyDetail() {
         {gridReady && (
           <Section
             step={3}
-            title="Import the meter file"
-            subtitle="Pull the SD card, connect it to the iPad, and pick LXB01001.XLS from the LXB01 folder."
+            title="Get the readings in"
+            subtitle="Either type them at each point during the walk, or import the meter's file afterwards."
           >
+            <p className="text-sm text-ink/70 mb-3 max-w-2xl">
+              {/* The typed route is not just a convenience: it removes the three
+                  things that actually go wrong with the card — the 99-position
+                  limit, the transfer itself, and a second lot appended to the
+                  same file and merged over the first. */}
+              Typing readings on the walk needs no SD card, has no 99-reading limit, and cannot
+              merge one lot into another. Importing keeps the meter&rsquo;s own file as the
+              record. Either way the readings land in the same place.
+            </p>
+
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink/50 mb-2">
+              Import the meter file
+            </p>
+            <p className="text-sm text-ink/60 mb-2">
+              Pull the SD card, connect it to the iPad, and pick LXB01001.XLS from the LXB01
+              folder.
+            </p>
             <input
               ref={fileRef}
               type="file"
@@ -1035,7 +1069,14 @@ export default function LightSurveyDetail() {
                 <span>
                   {readingCount}
                   {plan ? ` of ${plan.expectedReadings}` : ''} points have readings
-                  {survey.imported_filename && <> · {survey.imported_filename}</>}
+                  {/* Where they came from, because the two routes fail in
+                      different ways and the filename is the only thread back to
+                      a meter file. */}
+                  {survey.imported_filename ? (
+                    <> · {survey.imported_filename}</>
+                  ) : (
+                    <> · typed in during the walk</>
+                  )}
                 </span>
                 <button
                   type="button"
@@ -1054,11 +1095,12 @@ export default function LightSurveyDetail() {
           <Section
             step={4}
             title="Results"
-            subtitle="Waiting on the meter file"
+            subtitle="Waiting on the readings"
           >
             <p className="text-sm text-ink/70 max-w-2xl">
-              The scorecard, the lot map, and the standalone Light Survey PDF appear here once
-              readings are imported at step 3. Nothing to calculate from an empty grid.
+              The scorecard, the lot map, and the standalone Light Survey PDF appear here once the
+              lot has been read — typed in on the walk, or imported at step 3. Nothing to
+              calculate from an empty grid.
             </p>
             <button
               type="button"

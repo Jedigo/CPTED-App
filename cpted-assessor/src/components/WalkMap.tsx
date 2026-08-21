@@ -391,7 +391,11 @@ export default function WalkMap({
                 textDecoration: isSkipped ? 'line-through' : undefined,
               }}
             >
-              {isCurrent && value !== undefined ? value.toFixed(1) : p.index}
+              {/* Always the point number, never the reading. The number is what
+                  answers "which point am I on"; a marker reading "0.0" is a
+                  value where an identity should be, and the keypad shows the
+                  value anyway. */}
+              {p.index}
             </div>
           );
         })}

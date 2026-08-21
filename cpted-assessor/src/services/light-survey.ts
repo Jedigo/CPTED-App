@@ -163,6 +163,87 @@ export async function importMeterReadings(
 }
 
 /**
+ * Record a reading typed at the point, during the walk.
+ *
+ * The alternative to the meter's SD card, not a replacement for it: a lot filled
+ * in this way never touches the SDL400's 99-position limit, the card transfer,
+ * or the multi-session merge that silently overwrites one lot with the next.
+ * The cost is typing in the dark, which is why it is offered rather than
+ * imposed.
+ *
+ * Upserts on point_index, so re-reading a point overwrites instead of leaving
+ * two values for one cell and letting the statistics pick one.
+ *
+ * measured_at comes from the device clock, which — unlike the meter's, which
+ * stamps the year 2000 until someone sets it — is actually right.
+ */
+export async function enterReading(
+  surveyId: string,
+  pointIndex: number,
+  valueFc: number,
+): Promise<void> {
+  await db.transaction('rw', db.light_surveys, db.light_readings, db.assessments, async () => {
+    const survey = await db.light_surveys.get(surveyId);
+    if (!survey) return;
+
+    await db.light_readings
+      .where('survey_id')
+      .equals(surveyId)
+      .and((r) => r.point_index === pointIndex)
+      .delete();
+
+    await db.light_readings.add({
+      id: uuidv4(),
+      survey_id: surveyId,
+      assessment_id: survey.assessment_id,
+      point_index: pointIndex,
+      value_fc: valueFc,
+      raw_value: valueFc,
+      raw_unit: 'Ft cd',
+      measured_at: new Date().toISOString(),
+      // No meter Place to trace back to: the number came off the display, not
+      // out of a file.
+      meter_place: null,
+      source: 'manual',
+    });
+
+    await db.light_surveys.update(surveyId, { updated_at: new Date().toISOString() });
+    await touchAssessment(survey.assessment_id);
+  });
+}
+
+/** Undo a reading typed at a point, leaving the cell unread. */
+export async function clearReading(surveyId: string, pointIndex: number): Promise<void> {
+  await db.transaction('rw', db.light_surveys, db.light_readings, db.assessments, async () => {
+    const survey = await db.light_surveys.get(surveyId);
+    if (!survey) return;
+    const removed = await db.light_readings
+      .where('survey_id')
+      .equals(surveyId)
+      .and((r) => r.point_index === pointIndex)
+      .delete();
+    if (removed === 0) return;
+    await db.light_surveys.update(surveyId, { updated_at: new Date().toISOString() });
+    await touchAssessment(survey.assessment_id);
+  });
+}
+
+/**
+ * How many of a survey's readings were typed rather than imported.
+ *
+ * Asked before an import, which replaces every reading the survey holds: typed
+ * readings exist nowhere else, so wiping them without saying so would destroy
+ * the only copy of a night's work.
+ */
+export async function countTypedReadings(surveyId: string): Promise<number> {
+  return db.light_readings
+    .where('survey_id')
+    .equals(surveyId)
+    .and((r) => r.source === 'manual')
+    .count();
+}
+
+/**
  * Remember which point the walk is on.
  *
  * Deliberately does NOT go through updateLightSurvey, and so does not touch the
