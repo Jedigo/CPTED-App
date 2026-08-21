@@ -454,6 +454,8 @@ export async function pullAssessment(
             notes: ls.notes || '',
             aerial_image: ls.aerial_image ?? null,
             aerial_credit: ls.aerial_credit ?? null,
+            aerial_base: ls.aerial_base ?? null,
+            walk_position: ls.walk_position ?? null,
             grid_flipped: ls.grid_flipped ?? false,
             grid_origin: ls.grid_origin ?? 'edge',
             unit: ls.unit || 'fc',

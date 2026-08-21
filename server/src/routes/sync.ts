@@ -227,6 +227,26 @@ router.post('/sync', async (req, res, next) => {
       // build posts no light_surveys key at all, and wiping the server's copy
       // because an out-of-date client didn't mention them would be data loss.
       if (payload.light_surveys !== undefined) {
+        // The delete-then-insert above is whole-row, so a client too old to
+        // know about a column would blank it just by pushing the survey. That
+        // matters for the walking view's cached aerial: it only comes back by
+        // reopening the map with a network connection, which is precisely what
+        // the field does not have. Read the current values first and carry
+        // forward anything the client did not mention -- the same key-presence
+        // rule as report_signed_on, applied a field at a time because a survey
+        // is replaced wholesale rather than updated.
+        const kept = new Map<string, { aerial_base: unknown; walk_position: number | null }>();
+        for (const row of await tx
+          .select({
+            id: lightSurveys.id,
+            aerial_base: lightSurveys.aerial_base,
+            walk_position: lightSurveys.walk_position,
+          })
+          .from(lightSurveys)
+          .where(eq(lightSurveys.assessment_id, assessmentId))) {
+          kept.set(row.id, { aerial_base: row.aerial_base, walk_position: row.walk_position });
+        }
+
         await tx.delete(lightReadings).where(eq(lightReadings.assessment_id, assessmentId));
         await tx.delete(lightSurveys).where(eq(lightSurveys.assessment_id, assessmentId));
 
@@ -265,6 +285,14 @@ router.post('/sync', async (req, res, next) => {
               notes: (ls.notes as string) || '',
               aerial_image: (ls.aerial_image as string) ?? null,
               aerial_credit: (ls.aerial_credit as string) ?? null,
+              aerial_base:
+                'aerial_base' in ls
+                  ? (ls.aerial_base ?? null)
+                  : (kept.get(ls.id as string)?.aerial_base ?? null),
+              walk_position:
+                'walk_position' in ls
+                  ? ((ls.walk_position as number) ?? null)
+                  : (kept.get(ls.id as string)?.walk_position ?? null),
               unit: (ls.unit as string) || 'fc',
               imported_filename: (ls.imported_filename as string) ?? null,
               imported_at: (ls.imported_at as string) ?? null,

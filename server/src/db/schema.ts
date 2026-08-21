@@ -206,6 +206,15 @@ export const lightSurveys = pgTable('light_surveys', {
   aerial_image: text('aerial_image'),
   /** Attribution for that image, printed beneath it in the report. */
   aerial_credit: text('aerial_credit'),
+  /**
+   * The plain aerial the lot was framed on, with the ground extent it covers,
+   * so the walking view can draw points onto it with no network. jsonb rather
+   * than separate columns because it is one indivisible thing — an image paired
+   * with the wrong bounds puts every point in the wrong place, silently.
+   */
+  aerial_base: jsonb('aerial_base'),
+  /** Which point the walk is on, 1-based in serpentine order. */
+  walk_position: integer('walk_position'),
 
   unit: varchar('unit', { length: 10 }).notNull().default('fc'),
   imported_filename: varchar('imported_filename', { length: 255 }),

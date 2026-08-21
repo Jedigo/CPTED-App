@@ -56,6 +56,8 @@ export function newLightSurvey(assessmentId: string, areaName: string): LightSur
 
     aerial_image: null,
     aerial_credit: null,
+    aerial_base: null,
+    walk_position: null,
 
     unit: 'fc',
     imported_filename: null,
@@ -158,6 +160,22 @@ export async function importMeterReadings(
   });
 
   return { imported: records.length, reconciliation };
+}
+
+/**
+ * Remember which point the walk is on.
+ *
+ * Deliberately does NOT go through updateLightSurvey, and so does not touch the
+ * assessment's revision. A walk position is a bookmark, not content: nothing
+ * measured has changed, and bumping here would add a revision per tap of Next —
+ * seventy of them for one lot — so an assessment that was merely navigated
+ * would look heavily edited and start crying conflict at the next sync. Same
+ * rule that keeps persistAllScores() from bumping.
+ *
+ * updated_at is left alone for the same reason.
+ */
+export async function setWalkPosition(surveyId: string, pointIndex: number | null): Promise<void> {
+  await db.light_surveys.update(surveyId, { walk_position: pointIndex });
 }
 
 /** True once a grid has been chosen and the survey can be walked. */

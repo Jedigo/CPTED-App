@@ -1,0 +1,32 @@
+-- What the assessor needs to walk a lighting grid in a dark car park.
+--
+-- The grid is plotted at a desk on county aerial imagery, but until now the
+-- only way to see it on site was to export a KML, open it in Google Earth on a
+-- second device, and read it there. A real night walk settled that: the person
+-- is holding a light meter and needs to know where point 37 is, on the device
+-- in their hand.
+--
+-- aerial_base is the plain imagery the lot was framed on, stored with the
+-- EPSG:3857 extent it covers. It is jsonb rather than an image column beside
+-- four coordinate columns because the two halves are one indivisible fact: an
+-- image paired with the wrong bounds puts every grid point in the wrong place
+-- with nothing looking wrong, which is the exact failure the corner picker
+-- exists to prevent. It is deliberately NOT the same thing as aerial_image --
+-- that one is a finished picture for the report with the grid already drawn
+-- into the pixels and no bounds attached, so nothing can be highlighted on it.
+--
+-- Its reason for existing is offline. The county imagery server is a network
+-- fetch away and the iPads are Wi-Fi-only, tethered to a phone hotspot; a lot
+-- being walked at night is exactly where that is least likely to hold up. The
+-- picture therefore has to be carried, not requested.
+--
+-- walk_position is which point the walk is on, 1-based in the serpentine order.
+-- Persisted rather than held in memory because an iPad sleeps in a pocket
+-- between readings, and losing the place mid-lot means counting cells in the
+-- dark to find it again.
+--
+-- Both are nullable with no default, like every column added since 0003: absent
+-- means "this survey predates the walking view", which reads correctly as no
+-- cached map and a walk not yet started.
+ALTER TABLE "light_surveys" ADD COLUMN IF NOT EXISTS "aerial_base" jsonb;--> statement-breakpoint
+ALTER TABLE "light_surveys" ADD COLUMN IF NOT EXISTS "walk_position" integer;

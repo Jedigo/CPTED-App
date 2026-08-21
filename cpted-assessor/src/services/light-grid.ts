@@ -399,3 +399,86 @@ export function assignReadingsByPlace<T extends { place: number }>(
     },
   };
 }
+
+// --- Walking the grid ------------------------------------------------------
+//
+// What to say to someone standing in a dark car park holding a light meter.
+//
+// Never "left" or "right": the app has no idea which way the assessor is
+// facing — the iPads are Wi-Fi-only with no compass fix worth trusting — so a
+// turn instruction would be a coin flip. Everything here is phrased relative to
+// the walk itself, which the assessor can see on the map in front of them.
+
+export interface WalkStep {
+  /** Straight-line distance to the next point, in feet. */
+  distance_ft: number;
+  instruction: string;
+}
+
+/**
+ * The move from one point to the next, in words.
+ *
+ * `from` is null at the start of a walk, where there is no previous point and
+ * the useful thing to say is where the first reading actually stands — half a
+ * cell in from the corner on a centred grid, which surprises people who expect
+ * to start on the corner itself.
+ */
+export function walkStep(from: number | null, to: number, grid: Grid): WalkStep {
+  const target = pointPosition(to, grid);
+
+  if (from === null) {
+    return {
+      distance_ft: 0,
+      instruction:
+        `Point ${to} stands ${Math.round(target.x_ft)} ft along the long side ` +
+        `and ${Math.round(target.y_ft)} ft across from the start corner.`,
+    };
+  }
+
+  const start = pointPosition(from, grid);
+  const distance = Math.round(Math.hypot(target.x_ft - start.x_ft, target.y_ft - start.y_ft));
+
+  const a = pointToCell(from, grid.cols);
+  const b = pointToCell(to, grid.cols);
+
+  if (a.row === b.row) {
+    return { distance_ft: distance, instruction: `${distance} ft along the row.` };
+  }
+  if (Math.abs(a.row - b.row) === 1 && a.col === b.col) {
+    return b.row > a.row
+      ? {
+          distance_ft: distance,
+          instruction: `End of the row — ${distance} ft across, then back the other way.`,
+        }
+      : {
+          distance_ft: distance,
+          instruction: `${distance} ft back across to the previous row.`,
+        };
+  }
+  // A jump, which only happens when a point is tapped directly on the map or a
+  // long run of obstructed points is skipped over.
+  return { distance_ft: distance, instruction: `About ${distance} ft away.` };
+}
+
+/**
+ * The next walkable point after `current`, honouring the skip list.
+ *
+ * Returns null at either end of the walk. Obstructed points are stepped over
+ * rather than stopped on: they are never read, so pausing on one would just be
+ * a tap that does nothing.
+ */
+export function stepPoint(current: number, direction: 1 | -1, plan: PointPlan): number | null {
+  const at = plan.walkOrder.indexOf(current);
+  if (at !== -1) return plan.walkOrder[at + direction] ?? null;
+
+  // Standing on a point that has since been marked obstructed. Fall to the
+  // nearest walkable point in the direction of travel. walkOrder is ascending,
+  // so backwards means the last one below rather than the first.
+  if (direction === 1) return plan.walkOrder.find((p) => p > current) ?? null;
+  let below: number | null = null;
+  for (const p of plan.walkOrder) {
+    if (p >= current) break;
+    below = p;
+  }
+  return below;
+}

@@ -27,6 +27,7 @@
  */
 
 import type { LatLng } from './light-geo';
+import type { CachedAerial } from '../types';
 
 const SERVER = 'https://maps5.vcgov.org/arcgis/rest/services';
 const IMAGERY = `${SERVER}/Aerials/2024_Aerial/ImageServer/exportImage`;
@@ -80,6 +81,28 @@ export interface AerialView {
 }
 
 export type AerialBounds = Omit<AerialView, 'image' | 'spanFt' | 'center'>;
+
+/**
+ * Strip a fetched view down to what is worth storing: the picture and the
+ * ground it covers.
+ *
+ * The centre and span are dropped because both are derivable from the bounds,
+ * and a stored copy of a derived value is a chance for the two to disagree.
+ * Returns null for a view with no image, so a caller cannot cache a blank.
+ */
+export function cachedAerialFrom(view: AerialView | null | undefined): CachedAerial | null {
+  if (!view || !view.image) return null;
+  return {
+    image: view.image,
+    minX: view.minX,
+    minY: view.minY,
+    maxX: view.maxX,
+    maxY: view.maxY,
+    widthPx: view.widthPx,
+    heightPx: view.heightPx,
+    credit: IMAGERY_CREDIT,
+  };
+}
 
 /** Bounds covering `spanFt` of real ground across, centred on a point. */
 export function viewBounds(

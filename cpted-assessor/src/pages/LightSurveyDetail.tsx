@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/database';
 import {
@@ -51,7 +51,7 @@ import { compressImage } from '../services/photos';
 import LightGridMap from '../components/LightGridMap';
 import AerialCornerPicker from '../components/AerialCornerPicker';
 import { renderAerialWithGrid } from '../services/aerial-render';
-import { IMAGERY_CREDIT } from '../services/county-imagery';
+import { IMAGERY_CREDIT, cachedAerialFrom } from '../services/county-imagery';
 import type { AerialView } from '../services/county-imagery';
 import HeaderBackButton from '../components/HeaderBackButton';
 import ThemeToggle from '../components/ThemeToggle';
@@ -239,6 +239,7 @@ const GPS_ACCURACY_LIMIT_M = 5;
 
 export default function LightSurveyDetail() {
   const { id, surveyId } = useParams<{ id: string; surveyId: string }>();
+  const navigate = useNavigate();
 
   const survey = useLiveQuery(
     () => (surveyId ? db.light_surveys.get(surveyId) : undefined),
@@ -454,6 +455,13 @@ export default function LightSurveyDetail() {
         }
       }
     }
+
+    // Frame the lot on the map and the map comes with you. The walking view
+    // draws on this offline, and a dark car park is exactly where the county
+    // imagery server is least likely to be reachable.
+    const base = cachedAerialFrom(aerialView.current);
+    if (base) patch.aerial_base = base;
+
     await updateLightSurvey(surveyId, patch);
   }
 
@@ -678,7 +686,18 @@ export default function LightSurveyDetail() {
                   width: parseLatLng(widthPtInput),
                 }}
                 readingCount={readings?.length ?? 0}
-                onImage={(v) => { aerialView.current = v; }}
+                onImage={(v) => {
+                  aerialView.current = v;
+                  // Surveys plotted before this field carry no cached map, and
+                  // their corners are already set, so nothing would ever write
+                  // one. Take the first view offered instead. Only when there
+                  // is none — writing on every pan would inflate the
+                  // assessment's revision by a gesture at a time.
+                  if (surveyId && survey && !survey.aerial_base) {
+                    const base = cachedAerialFrom(v);
+                    if (base) void updateLightSurvey(surveyId, { aerial_base: base });
+                  }
+                }}
                 onChange={(next) => {
                   setOriginInput(next.origin ? formatLatLng(next.origin) : '');
                   setAxisInput(next.axis ? formatLatLng(next.axis) : '');
@@ -906,6 +925,16 @@ export default function LightSurveyDetail() {
               `. The numbering snakes back and forth so you never cross the lot twice.`
             }
           >
+            <button
+              onClick={() => navigate(`/assessment/${id}/light/${surveyId}/walk`)}
+              className="w-full bg-navy text-white font-bold rounded-xl px-5 py-4 mb-4 text-left"
+            >
+              <span className="block text-lg">Walk the grid →</span>
+              <span className="block text-sm font-normal text-white/70">
+                The lot, the numbered points, and where you are — on this iPad, no signal needed.
+              </span>
+            </button>
+
             <div className="bg-blue-pale border border-ink/10 rounded-lg p-4 mb-4 text-sm text-ink/80">
               <p className="font-semibold text-ink mb-2">Meter setup — check before you start</p>
               <ul className="space-y-1 list-disc ml-4">

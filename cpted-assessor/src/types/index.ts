@@ -313,10 +313,49 @@ export interface LightSurvey {
    */
   aerial_credit: string | null
 
+  /**
+   * The plain aerial the lot was framed on, kept with the ground extent it
+   * covers so points can be drawn onto it later.
+   *
+   * Distinct from aerial_image, which is a finished picture for the report with
+   * the grid already burned in and no bounds attached — you cannot highlight
+   * anything on it. This one exists so the walking view works with no network:
+   * the county imagery server is a fetch away, and the lot being walked may
+   * have no signal at all.
+   */
+  aerial_base: CachedAerial | null
+
+  /**
+   * Which point the walk is on, 1-based in serpentine order. Persisted because
+   * an iPad that sleeps in a pocket between readings must not lose the place.
+   * Absent means the walk has not been started.
+   */
+  walk_position?: number | null
+
   // Import provenance
   unit: IlluminanceUnit
   imported_filename: string | null
   imported_at: string | null
+}
+
+/**
+ * An aerial image plus the EPSG:3857 ground extent it covers.
+ *
+ * Structurally the same as AerialBounds in services/county-imagery, which is
+ * what latLngToPixel takes — declared here rather than imported so the type
+ * layer keeps depending on nothing.
+ */
+export interface CachedAerial {
+  /** base64 JPEG data URL. */
+  image: string
+  minX: number
+  minY: number
+  maxX: number
+  maxY: number
+  widthPx: number
+  heightPx: number
+  /** Attribution, carried with the image so it can never be paired wrongly. */
+  credit: string
 }
 
 export interface LightReading {
