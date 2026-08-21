@@ -245,8 +245,14 @@ npm run dev           # Start Vite dev server
 npm run build         # Production build
 npm run preview       # Preview production build
 npm run lint          # Run linter
-npm run type-check    # TypeScript type checking
+npm run type-check    # TypeScript type checking (tsc -b --noEmit)
 ```
+
+**Type-check with `tsc -b`, never a bare `tsc --noEmit`.** The root `tsconfig.json`
+is solution-style — `"files": []` plus project references — so `npx tsc --noEmit`
+exits 0 having checked **nothing**. It reports a clean bill of health over code that
+does not compile. The `type-check` script exists so nobody has to remember the flag.
+
 
 ## Reference Files
 
